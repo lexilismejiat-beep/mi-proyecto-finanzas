@@ -13,14 +13,24 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
-export function TransactionsTable({ cardColor, textColor }: { cardColor?: string, textColor?: string }) {
+// AGREGAMOS userCedula a las propiedades
+export function TransactionsTable({ 
+  cardColor, 
+  textColor, 
+  userCedula 
+}: { 
+  cardColor?: string, 
+  textColor?: string,
+  userCedula?: string 
+}) {
   const [transactions, setTransactions] = useState<any[]>([])
   const supabase = createClient()
 
   const getCategoryStyle = (category: string) => {
     const cat = category?.toLowerCase().trim()
     const styles: { [key: string]: string } = {
-      sueldo: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      nómina: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      comida: "bg-orange-100 text-orange-700 border-orange-200",
       trading: "bg-blue-100 text-blue-700 border-blue-200",
       cena: "bg-orange-100 text-orange-700 border-orange-200",
       mercado: "bg-purple-100 text-purple-700 border-purple-200",
@@ -33,20 +43,22 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      // Si no hay cédula aún, no buscamos nada
+      if (!userCedula) return
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("transacciones")
         .select("*")
-        .eq("user_id", user.id) // <--- SOLO TUS TRANSACCIONES
+        .eq("user_id", userCedula) // <--- FILTRAMOS POR TU CÉDULA
         .order("created_at", { ascending: false })
         .limit(8)
       
-      if (data) setTransactions(data)
+      if (!error && data) {
+        setTransactions(data)
+      }
     }
     fetchTransactions()
-  }, [supabase])
+  }, [supabase, userCedula]) // Se actualiza cuando cambia la cédula
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CO", {
@@ -74,7 +86,9 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
           <TableBody>
             {transactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center opacity-50">No hay transacciones aún</TableCell>
+                <TableCell colSpan={4} className="text-center opacity-50 py-10">
+                  No hay transacciones aún para la cédula {userCedula}
+                </TableCell>
               </TableRow>
             ) : (
               transactions.map((t) => (
