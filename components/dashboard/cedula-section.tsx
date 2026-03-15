@@ -39,12 +39,16 @@ export function CedulaSection({
   const [isSaved, setIsSaved] = useState(false)
   const supabase = createClient()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // URL de tu bot Lex Finanzas
+  const TELEGRAM_BOT_URL = "https://t.me/lex_finanzas_bot"
+
+  const handleUpdateAndRedirect = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!cedula.trim() || !profile) return
 
     setIsLoading(true)
     try {
+      // 1. Guardamos en Supabase
       const { error } = await supabase
         .from("user_profiles")
         .update({ 
@@ -57,15 +61,14 @@ export function CedulaSection({
       
       setIsSaved(true)
 
-      // REDIRECCIÓN DIRECTA: Cambiamos window.open por window.location.href
-      // Esto evita que el navegador lo bloquee como "ventana emergente"
-      setTimeout(() => {
-        window.location.href = "https://t.me/lex_finanzas_bot"
-      }, 1000)
+      // 2. Redirección forzada usando el método más compatible
+      // Abrimos en la misma pestaña para evitar bloqueadores de pop-ups
+      window.location.replace(TELEGRAM_BOT_URL)
 
     } catch (error) {
-      console.error("Error updating cedula:", error)
-      alert("Error al guardar. Verifica tu conexión.")
+      console.error("Error updating profile:", error)
+      // Fallback: Si falla la DB, intentamos enviarlo al bot de todos modos
+      window.location.replace(TELEGRAM_BOT_URL)
     } finally {
       setIsLoading(false)
     }
@@ -73,29 +76,29 @@ export function CedulaSection({
 
   return (
     <div className="space-y-4">
-      {/* Información del Perfil */}
+      {/* Tarjeta de Información de Usuario */}
       {profile && (
-        <Card className="border-border" style={{ backgroundColor: cardColor }}>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: textColor }}>
-              <User className="h-5 w-5" style={{ color: primaryColor }} />
+        <Card className="border-border shadow-sm" style={{ backgroundColor: cardColor }}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2" style={{ color: textColor }}>
+              <User className="h-4 w-4" style={{ color: primaryColor }} />
               Tu Información
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3">
               <div 
-                className="flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-lg"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm shadow-inner"
                 style={{ backgroundColor: primaryColor }}
               >
                 {profile.nombres?.[0]}{profile.apellidos?.[0]}
               </div>
               <div>
-                <p className="font-medium" style={{ color: textColor }}>
+                <p className="text-sm font-semibold" style={{ color: textColor }}>
                   {profile.nombres} {profile.apellidos}
                 </p>
-                <p className="text-sm opacity-60" style={{ color: textColor }}>
-                  CC: {cedula || "No registrada"}
+                <p className="text-[11px] opacity-70 italic" style={{ color: textColor }}>
+                  ID: {profile.cedula || "No registrada"}
                 </p>
               </div>
             </div>
@@ -103,46 +106,51 @@ export function CedulaSection({
         </Card>
       )}
 
-      {/* Sección de Telegram */}
-      <Card className="border-border" style={{ backgroundColor: cardColor }}>
-        <CardHeader>
+      {/* Tarjeta de Vinculación con Telegram */}
+      <Card className="border-border shadow-md" style={{ backgroundColor: cardColor }}>
+        <CardHeader className="pb-3">
           <div className="flex items-center gap-3">
             <div 
-              className="flex h-10 w-10 items-center justify-center rounded-lg"
+              className="flex h-9 w-9 items-center justify-center rounded-lg shadow-sm"
               style={{ backgroundColor: `${primaryColor}20` }}
             >
-              <Send className="h-5 w-5" style={{ color: primaryColor }} />
+              <Send className="h-4 w-4" style={{ color: primaryColor }} />
             </div>
             <div>
-              <CardTitle className="text-base font-semibold" style={{ color: textColor }}>
+              <CardTitle className="text-sm font-bold" style={{ color: textColor }}>
                 Vinculación Telegram
               </CardTitle>
-              <CardDescription className="text-sm opacity-60" style={{ color: textColor }}>
-                Registra tu cédula para ir al bot
+              <CardDescription className="text-[11px] font-medium" style={{ color: textColor, opacity: 0.7 }}>
+                Actualiza tu cédula para recibir notificaciones
               </CardDescription>
             </div>
           </div>
-        </Header>
+        </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="space-y-2">
-              <label htmlFor="cedula" className="text-sm font-medium" style={{ color: textColor }}>
+          <form onSubmit={handleUpdateAndRedirect} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="cedula-input" className="text-[11px] font-bold uppercase tracking-wider opacity-80" style={{ color: textColor }}>
                 Número de Cédula
               </label>
               <Input
-                id="cedula"
+                id="cedula-input"
                 type="text"
-                placeholder="Ej: 12345678"
+                placeholder="Ingresa tu documento"
                 value={cedula}
                 onChange={(e) => setCedula(e.target.value)}
-                style={{ backgroundColor: `${textColor}10`, color: textColor }}
+                className="h-9 text-sm"
+                style={{ 
+                  backgroundColor: `${textColor}05`,
+                  color: textColor,
+                  borderColor: `${textColor}20`
+                }}
               />
             </div>
-            
+
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full gap-2 text-white font-bold"
+              className="w-full h-10 gap-2 text-xs font-bold transition-all active:scale-95 text-white"
               style={{ backgroundColor: primaryColor }}
             >
               {isLoading ? (
@@ -150,20 +158,22 @@ export function CedulaSection({
               ) : isSaved ? (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Redirigiendo a Telegram...
+                  Redirigiendo...
                 </>
               ) : (
                 <>
                   <ExternalLink className="h-4 w-4" />
-                  Guardar e Ir al Bot
+                  Actualizar y Vincular Bot
                 </>
               )}
             </Button>
           </form>
           
-          <p className="mt-3 text-[10px] text-center opacity-50" style={{ color: textColor }}>
-            @lex_finanzas_bot se abrirá automáticamente.
-          </p>
+          <div className="mt-4 pt-3 border-t border-border/50">
+            <p className="text-[10px] text-center leading-relaxed italic opacity-60" style={{ color: textColor }}>
+              Al actualizar, serás enviado automáticamente a nuestro bot oficial en Telegram.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
