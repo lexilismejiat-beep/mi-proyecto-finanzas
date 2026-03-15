@@ -45,15 +45,29 @@ export function CedulaSection({
 
     setIsLoading(true)
     try {
-      await supabase
+      // 1. Actualizar la cédula en Supabase
+      const { error } = await supabase
         .from("user_profiles")
-        .update({ cedula, updated_at: new Date().toISOString() })
+        .update({ 
+          cedula: cedula.trim(), 
+          updated_at: new Date().toISOString() 
+        })
         .eq("id", profile.id)
+
+      if (error) throw error
       
       setIsSaved(true)
-      setTimeout(() => setIsSaved(false), 3000)
+
+      // 2. Redirigir al bot de Telegram después de guardar
+      // Usamos un pequeño delay para que el usuario vea el estado "Guardado"
+      setTimeout(() => {
+        setIsSaved(false)
+        window.open(`https://t.me/lex_finanzas_bot`, '_blank')
+      }, 1500)
+
     } catch (error) {
       console.error("Error updating cedula:", error)
+      alert("No se pudo actualizar la cédula. Intenta de nuevo.")
     } finally {
       setIsLoading(false)
     }
@@ -83,7 +97,7 @@ export function CedulaSection({
                   {profile.nombres} {profile.apellidos}
                 </p>
                 <p className="text-sm opacity-60" style={{ color: textColor }}>
-                  {profile.cedula || "Sin cédula registrada"}
+                  {cedula || "Sin cédula registrada"}
                 </p>
               </div>
             </div>
@@ -95,10 +109,10 @@ export function CedulaSection({
               </div>
             )}
             
-            {profile.ciudad && (
+            {(profile.ciudad || profile.pais) && (
               <div className="flex items-center gap-2 text-sm" style={{ color: textColor }}>
                 <MapPin className="h-4 w-4 opacity-60" />
-                <span>{profile.ciudad}, {profile.pais}</span>
+                <span>{profile.ciudad}{profile.ciudad && profile.pais ? ', ' : ''}{profile.pais}</span>
               </div>
             )}
             
@@ -135,7 +149,7 @@ export function CedulaSection({
               </CardDescription>
             </div>
           </div>
-        </CardHeader>
+        </Header>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="flex-1 space-y-2">
@@ -173,7 +187,7 @@ export function CedulaSection({
               ) : isSaved ? (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Guardado
+                  ¡Listo!
                 </>
               ) : (
                 <>
@@ -184,8 +198,8 @@ export function CedulaSection({
             </Button>
           </form>
           <p className="mt-3 text-xs opacity-60" style={{ color: textColor }}>
-            Al vincular tu cédula, recibirás alertas de transacciones y resúmenes
-            semanales directamente en tu Telegram.
+            Al hacer clic en actualizar, guardaremos tu cédula y te llevaremos a 
+            <strong> @lex_finanzas_bot</strong> para completar la vinculación.
           </p>
         </CardContent>
       </Card>
