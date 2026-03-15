@@ -10,26 +10,10 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
-interface UserProfile {
-  id: string
-  nombres: string
-  apellidos: string
-  cedula: string
-  telefono: string
-  fecha_nacimiento: string | null
-  genero: string | null
-  direccion: string | null
-  ciudad: string | null
-  pais: string | null
-  avatar_url: string | null
-}
-
 export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  
-  // Estado para guardar los totales de dinero real
+  const [profile, setProfile] = useState<any>(null)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
   const supabase = createClient()
@@ -38,46 +22,41 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        // 1. Traer el perfil del usuario
-        const { data: profileData } = await supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single()
-        setProfile(profileData)
+      if (!user) return
 
-        // 2. Traer los datos de la tabla "transacciones"
-        const { data: transData } = await supabase
-          .from("transacciones")
-          .select("monto, tipo")
+      // 1. Cargar Perfil
+      const { data: profileData } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
+      setProfile(profileData)
 
-        if (transData) {
-          // Calculamos los ingresos sumando solo los tipos "Ingreso"
-         const income = transData
-  .filter((t) => t.tipo.trim() === "Ingreso")
-  .reduce((acc, t) => acc + parseFloat(t.monto || 0), 0)
+      // 2. Cargar y Calcular Transacciones Reales
+      const { data: transData } = await supabase
+        .from("transacciones")
+        .select("monto, tipo")
 
-const expenses = transData
-  .filter((t) => t.tipo.trim() === "Egreso")
-  .reduce((acc, t) => acc + parseFloat(t.monto || 0), 0)
+      if (transData) {
+        // Sumamos Ingresos (limpiando espacios y asegurando que sea número)
+        const income = transData
+          .filter((t: any) => t.tipo?.trim() === "Ingreso")
+          .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+        
+        // Sumamos Egresos
+        const expenses = transData
+          .filter((t: any) => t.tipo?.trim() === "Egreso")
+          .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
 
-          setTotals({
-            income,
-            expenses,
-            balance: income - expenses
-          })
-        }
+        setTotals({
+          income,
+          expenses,
+          balance: income - expenses
+        })
       }
     }
-    
     fetchData()
   }, [supabase])
-
-  const userName = profile 
-    ? `${profile.nombres} ${profile.apellidos}`.trim() 
-    : "Usuario"
 
   return (
     <div className="min-h-screen">
@@ -88,35 +67,22 @@ const expenses = transData
         onMobileOpenChange={setMobileSidebarOpen}
         sidebarColor={theme.sidebar_color}
       />
-
-      <div
-        className={cn(
-          "transition-all duration-300",
-          "lg:ml-64",
-          sidebarCollapsed && "lg:ml-16"
-        )}
-      >
+      <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
-          userName={userName}
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
-
         <main className="p-6">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold" style={{ color: theme.text_color }}>
-              Resumen Financiero
-            </h2>
-            <p className="text-sm opacity-70" style={{ color: theme.text_color }}>
-              Visualiza tus ingresos, gastos y balance general
-            </p>
+            <h2 className="text-2xl font-bold" style={{ color: theme.text_color }}>Resumen Financiero</h2>
           </div>
 
-          {/* Stats Cards: Ahora le pasamos los datos calculados de Supabase */}
           <div className="mb-6">
+            {/* ENVIAMOS LOS TOTALES REALES AQUÍ */}
             <StatsCards 
-              totalIncome={totals.income}
-              totalExpenses={totals.expenses}
+              totalIncome={totals.income} 
+              totalExpenses={totals.expenses} 
               currentBalance={totals.balance}
               cardColor={theme.card_color} 
               textColor={theme.text_color} 
@@ -128,14 +94,8 @@ const expenses = transData
             <div className="lg:col-span-2">
               <TransactionsTable cardColor={theme.card_color} textColor={theme.text_color} />
             </div>
-
             <div className="lg:col-span-1">
-              <CedulaSection 
-                profile={profile}
-                cardColor={theme.card_color} 
-                textColor={theme.text_color}
-                primaryColor={theme.primary_color}
-              />
+              <CedulaSection profile={profile} cardColor={theme.card_color} textColor={theme.text_color} />
             </div>
           </div>
         </main>
