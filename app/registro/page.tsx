@@ -48,27 +48,31 @@ export default function RegistroPage() {
     getUser()
   }, [supabase, router])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
 
     setIsLoading(true)
     try {
+      // Usamos UPSERT en lugar de UPDATE para que cree el registro si no existe
       const { error } = await supabase
         .from("user_profiles")
-        .update({
+        .upsert({
+          id: user.id, // Es obligatorio incluir el ID para el upsert
           ...formData,
           registration_complete: true,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", user.id)
 
       if (error) {
-        console.error("Error updating profile:", error)
+        console.error("Error saving profile:", error.message)
+        alert("Error al guardar: " + error.message) // Para que veas el error en pantalla
         return
       }
 
-      router.push("/")
+      // IMPORTANTE: Asegúrate de que esta sea la ruta de tu dashboard
+      router.push("/dashboard") 
+      
     } catch (error) {
       console.error("Unexpected error:", error)
     } finally {
