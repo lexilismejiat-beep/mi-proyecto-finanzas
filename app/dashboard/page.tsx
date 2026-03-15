@@ -24,7 +24,7 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 1. Cargar Perfil usando la tabla 'profiles' (la que ya tiene tu cédula)
+      // 1. Cargamos el perfil de la tabla 'profiles'
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
@@ -33,26 +33,29 @@ export default function DashboardPage() {
       
       setProfile(profileData)
 
-      // 2. Cargar Transacciones filtradas por el UUID del usuario
-      const { data: transData } = await supabase
-        .from("transacciones")
-        .select("monto, tipo")
-        .eq("user_id", user.id)
+      if (profileData?.cedula) {
+        // 2. FILTRO CLAVE: Buscamos transacciones que tengan TU CÉDULA
+        // Esto conecta lo que hace el bot con lo que muestra la App
+        const { data: transData } = await supabase
+          .from("transacciones")
+          .select("monto, tipo")
+          .or(`user_id.eq.${user.id},telegram_id.eq.${profileData.cedula}`)
 
-      if (transData) {
-        const income = transData
-          .filter((t: any) => t.tipo?.trim() === "Ingreso")
-          .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-        
-        const expenses = transData
-          .filter((t: any) => t.tipo?.trim() === "Egreso")
-          .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+        if (transData) {
+          const income = transData
+            .filter((t: any) => t.tipo?.trim() === "Ingreso")
+            .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+          
+          const expenses = transData
+            .filter((t: any) => t.tipo?.trim() === "Egreso")
+            .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
 
-        setTotals({
-          income,
-          expenses,
-          balance: income - expenses
-        })
+          setTotals({
+            income,
+            expenses,
+            balance: income - expenses
+          })
+        }
       }
     }
     fetchData()
@@ -69,8 +72,7 @@ export default function DashboardPage() {
       />
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
-          // Ajustado para usar full_name de la tabla profiles
-          userName={profile?.full_name || profile?.email || "Usuario"} 
+          userName={profile?.full_name || "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
@@ -92,7 +94,12 @@ export default function DashboardPage() {
 
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <TransactionsTable cardColor={theme.card_color} textColor={theme.text_color} />
+              {/* Le pasamos la cédula a la tabla para que ella también sepa qué mostrar */}
+              <TransactionsTable 
+                cardColor={theme.card_color} 
+                textColor={theme.text_color} 
+                cedula={profile?.cedula} 
+              />
             </div>
             <div className="lg:col-span-1">
               <CedulaSection profile={profile} cardColor={theme.card_color} textColor={theme.text_color} />
