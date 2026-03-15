@@ -1,148 +1,174 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Pencil, Trash2 } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Calendar as CalendarIcon, Plus, Filter } from "lucide-react"
 import { 
-  ShoppingCart, 
-  Home, 
-  Car, 
-  Utensils, 
-  Gamepad2, 
-  Briefcase, 
-  TrendingUp,
-  Wallet,
-  Heart,
-  GraduationCap
+  ShoppingCart, Home, Car, Utensils, Gamepad2, 
+  Briefcase, TrendingUp, Wallet, Heart, GraduationCap 
 } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { format, isWithinInterval, startOfMonth, endOfMonth } from "date-fns"
+import { es } from "date-fns/locale"
 
-const categories = [
-  { id: "1", name: "Salario", icon: Briefcase, color: "bg-emerald-500/20 text-emerald-400", type: "income", budget: 0 },
-  { id: "2", name: "Freelance", icon: Wallet, color: "bg-blue-500/20 text-blue-400", type: "income", budget: 0 },
-  { id: "3", name: "Inversiones", icon: TrendingUp, color: "bg-purple-500/20 text-purple-400", type: "income", budget: 0 },
-  { id: "4", name: "Alimentación", icon: ShoppingCart, color: "bg-orange-500/20 text-orange-400", type: "expense", budget: 500000 },
-  { id: "5", name: "Vivienda", icon: Home, color: "bg-cyan-500/20 text-cyan-400", type: "expense", budget: 1500000 },
-  { id: "6", name: "Transporte", icon: Car, color: "bg-yellow-500/20 text-yellow-400", type: "expense", budget: 200000 },
-  { id: "7", name: "Restaurantes", icon: Utensils, color: "bg-red-500/20 text-red-400", type: "expense", budget: 300000 },
-  { id: "8", name: "Entretenimiento", icon: Gamepad2, color: "bg-pink-500/20 text-pink-400", type: "expense", budget: 200000 },
-  { id: "9", name: "Salud", icon: Heart, color: "bg-rose-500/20 text-rose-400", type: "expense", budget: 150000 },
-  { id: "10", name: "Educación", icon: GraduationCap, color: "bg-indigo-500/20 text-indigo-400", type: "expense", budget: 100000 },
+// 1. Datos de ejemplo: Transacciones (Esto vendría de tu BD)
+const MOCK_TRANSACTIONS = [
+  { id: "t1", categoryId: "4", amount: 50000, date: new Date(2024, 4, 10), type: "expense" }, // Mayo 10
+  { id: "t2", categoryId: "4", amount: 30000, date: new Date(2024, 4, 15), type: "expense" }, // Mayo 15
+  { id: "t3", categoryId: "7", amount: 120000, date: new Date(2024, 4, 12), type: "expense" }, // Restaurantes
+  { id: "t4", categoryId: "1", amount: 2000000, date: new Date(2024, 4, 1), type: "income" },  // Salario
 ]
 
-export default function CategoriasPage() {
+const initialCategories = [
+  { id: "1", name: "Salario", icon: Briefcase, color: "bg-emerald-500/20 text-emerald-400", type: "income", budget: 0 },
+  { id: "4", name: "Alimentación", icon: ShoppingCart, color: "bg-orange-500/20 text-orange-400", type: "expense", budget: 500000 },
+  { id: "7", name: "Restaurantes", icon: Utensils, color: "bg-red-500/20 text-red-400", type: "expense", budget: 300000 },
+  // ... (puedes añadir las demás aquí)
+]
+
+export default function CategoriasDetallePage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-
-  const incomeCategories = categories.filter(c => c.type === "income")
-  const expenseCategories = categories.filter(c => c.type === "expense")
+  
+  // Estado para el filtro de fechas (Por defecto: Mes actual)
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  })
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
+      style: "currency", currency: "COP", minimumFractionDigits: 0,
     }).format(amount)
   }
 
+  // 2. LÓGICA AUTOMÁTICA: Filtrar y Calcular
+  const categoriesWithTotals = useMemo(() => {
+    return initialCategories.map(category => {
+      // Filtrar transacciones por categoría y fecha
+      const totalSpent = MOCK_TRANSACTIONS
+        .filter(t => 
+          t.categoryId === category.id && 
+          isWithinInterval(t.date, { start: dateRange.from, end: dateRange.to })
+        )
+        .reduce((sum, t) => sum + t.amount, 0)
+
+      // Calcular porcentaje del presupuesto (solo para gastos)
+      const percentage = category.budget > 0 ? (totalSpent / category.budget) * 100 : 0
+
+      return { ...category, totalSpent, percentage }
+    })
+  }, [dateRange])
+
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onCollapsedChange={setSidebarCollapsed}
-        mobileOpen={mobileSidebarOpen}
-        onMobileOpenChange={setMobileSidebarOpen}
-      />
+      <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
 
-      <div
-        className={cn(
-          "transition-all duration-300",
-          "lg:ml-64",
-          sidebarCollapsed && "lg:ml-16"
-        )}
-      >
-        <TopBar 
-          userName="Juan Pérez" 
-          onMenuClick={() => setMobileSidebarOpen(true)}
-        />
+      <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
+        <TopBar userName="Juan Pérez" onMenuClick={() => setMobileSidebarOpen(true)} />
 
         <main className="p-4 sm:p-6 lg:p-8">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Categorías</h1>
-              <p className="text-muted-foreground">Organiza tus ingresos y gastos por categorías</p>
+              <h1 className="text-2xl font-bold">Seguimiento por Categorías</h1>
+              <p className="text-muted-foreground">Análisis de gastos según el periodo seleccionado</p>
             </div>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nueva Categoría
-            </Button>
+
+            {/* FILTRO DE FECHAS */}
+            <div className="flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start text-left font-normal w-[280px]">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "dd LLL", { locale: es })} -{" "}
+                          {format(dateRange.to, "dd LLL, yyyy", { locale: es })}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, yyyy")
+                      )
+                    ) : (
+                      <span>Seleccionar fecha</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange.from}
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range: any) => range?.from && range?.to && setDateRange(range)}
+                    numberOfMonths={2}
+                    locale={es}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
-          {/* Income Categories */}
-          <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Categorías de Ingresos</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {incomeCategories.map((category) => {
-                const Icon = category.icon
-                return (
-                  <Card key={category.id} className="group relative">
-                    <CardContent className="flex items-center gap-4 p-4">
-                      <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", category.color)}>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {categoriesWithTotals.map((category) => {
+              const Icon = category.icon
+              const isOverBudget = category.percentage > 100
+
+              return (
+                <Card key={category.id} className="overflow-hidden border-t-4" style={{ borderTopColor: isOverBudget ? '#ef4444' : 'transparent' }}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className={cn("p-3 rounded-xl", category.color)}>
                         <Icon className="h-6 w-6" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-medium text-card-foreground">{category.name}</h3>
-                        <p className="text-sm text-muted-foreground">Ingreso</p>
-                      </div>
-                      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Expense Categories */}
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Categorías de Gastos</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {expenseCategories.map((category) => {
-                const Icon = category.icon
-                return (
-                  <Card key={category.id} className="group relative">
-                    <CardContent className="flex items-center gap-4 p-4">
-                      <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", category.color)}>
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-medium text-card-foreground">{category.name}</h3>
+                        <h3 className="font-bold text-lg">{category.name}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Presupuesto: {formatCurrency(category.budget)}
+                          {category.type === "income" ? "Total Ingresado" : "Gasto en este periodo"}
                         </p>
                       </div>
-                      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-end">
+                        <span className="text-2xl font-bold">{formatCurrency(category.totalSpent)}</span>
+                        {category.budget > 0 && (
+                          <span className="text-sm text-muted-foreground">
+                            de {formatCurrency(category.budget)}
+                          </span>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
+
+                      {category.type === "expense" && category.budget > 0 && (
+                        <div className="space-y-1">
+                          <Progress 
+                            value={category.percentage} 
+                            className="h-2" 
+                            indicatorClassName={isOverBudget ? "bg-destructive" : "bg-primary"}
+                          />
+                          <div className="flex justify-between text-xs">
+                            <span className={cn(isOverBudget ? "text-destructive font-medium" : "text-muted-foreground")}>
+                              {category.percentage.toFixed(1)}% utilizado
+                            </span>
+                            {isOverBudget && <span>¡Presupuesto excedido!</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </main>
       </div>
