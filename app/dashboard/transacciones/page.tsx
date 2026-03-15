@@ -1,16 +1,39 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { TransactionsTable } from "@/components/dashboard/transactions-table"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+import { useThemeSettings } from "@/lib/theme-context"
 
 export default function TransaccionesPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
+  
+  const supabase = createClient()
+  const { theme } = useThemeSettings()
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Obtenemos el perfil para sacar la cédula vinculada
+      const { data: profileData } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
+      
+      setProfile(profileData)
+    }
+    fetchProfile()
+  }, [supabase])
 
   return (
     <div className="min-h-screen bg-background">
@@ -19,6 +42,7 @@ export default function TransaccionesPage() {
         onCollapsedChange={setSidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onMobileOpenChange={setMobileSidebarOpen}
+        sidebarColor={theme.sidebar_color}
       />
 
       <div
@@ -29,23 +53,34 @@ export default function TransaccionesPage() {
         )}
       >
         <TopBar 
-          userName="Juan Pérez" 
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
         <main className="p-4 sm:p-6 lg:p-8">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Transacciones</h1>
+              <h1 className="text-2xl font-bold" style={{ color: theme.text_color }}>
+                Transacciones
+              </h1>
               <p className="text-muted-foreground">Administra todas tus transacciones</p>
             </div>
-            <Button className="gap-2">
+            <Button 
+              className="gap-2" 
+              style={{ backgroundColor: theme.primary_color }}
+            >
               <Plus className="h-4 w-4" />
               Nueva Transacción
             </Button>
           </div>
 
-          <TransactionsTable />
+          {/* Pasamos la cédula para que la tabla muestre los datos del bot */}
+          <TransactionsTable 
+            cardColor={theme.card_color} 
+            textColor={theme.text_color} 
+            userCedula={profile?.cedula} 
+          />
         </main>
       </div>
     </div>
