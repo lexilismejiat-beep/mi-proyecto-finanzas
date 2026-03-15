@@ -21,10 +21,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // 1. Obtener el usuario autenticado (el UUID de Google)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 1. Cargamos el perfil de la tabla 'profiles'
+      // 2. Buscar en 'profiles' la cédula vinculada a ese UUID
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
@@ -33,13 +34,13 @@ export default function DashboardPage() {
       
       setProfile(profileData)
 
+      // 3. Si el usuario tiene una cédula registrada, buscamos sus transacciones
       if (profileData?.cedula) {
-        // 2. FILTRO CLAVE: Buscamos transacciones que tengan TU CÉDULA
-        // Esto conecta lo que hace el bot con lo que muestra la App
         const { data: transData } = await supabase
           .from("transacciones")
           .select("monto, tipo")
-          .or(`user_id.eq.${user.id},telegram_id.eq.${profileData.cedula}`)
+          // Filtramos donde user_id de la transaccion sea igual a la cédula del perfil
+          .eq("user_id", profileData.cedula) 
 
         if (transData) {
           const income = transData
@@ -56,6 +57,9 @@ export default function DashboardPage() {
             balance: income - expenses
           })
         }
+      } else {
+        // Si no hay cédula, reseteamos totales a 0
+        setTotals({ income: 0, expenses: 0, balance: 0 })
       }
     }
     fetchData()
@@ -94,15 +98,19 @@ export default function DashboardPage() {
 
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              {/* Le pasamos la cédula a la tabla para que ella también sepa qué mostrar */}
+              {/* Pasamos la cédula a la tabla para que filtre internamente también */}
               <TransactionsTable 
                 cardColor={theme.card_color} 
                 textColor={theme.text_color} 
-                cedula={profile?.cedula} 
+                userCedula={profile?.cedula} 
               />
             </div>
             <div className="lg:col-span-1">
-              <CedulaSection profile={profile} cardColor={theme.card_color} textColor={theme.text_color} />
+              <CedulaSection 
+                profile={profile} 
+                cardColor={theme.card_color} 
+                textColor={theme.text_color} 
+              />
             </div>
           </div>
         </main>
