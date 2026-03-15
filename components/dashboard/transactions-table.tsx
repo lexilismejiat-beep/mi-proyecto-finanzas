@@ -17,7 +17,6 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
   const [transactions, setTransactions] = useState<any[]>([])
   const supabase = createClient()
 
-  // Función de colores ajustada a tus datos reales
   const getCategoryStyle = (category: string) => {
     const cat = category?.toLowerCase().trim()
     const styles: { [key: string]: string } = {
@@ -27,17 +26,23 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
       mercado: "bg-purple-100 text-purple-700 border-purple-200",
       compra: "bg-pink-100 text-pink-700 border-pink-200",
       ocio: "bg-indigo-100 text-indigo-700 border-indigo-200",
+      general: "bg-slate-100 text-slate-700 border-slate-200",
     }
     return styles[cat] || "bg-gray-100 text-gray-700 border-gray-200"
   }
 
   useEffect(() => {
     const fetchTransactions = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
       const { data } = await supabase
         .from("transacciones")
         .select("*")
+        .eq("user_id", user.id) // <--- SOLO TUS TRANSACCIONES
         .order("created_at", { ascending: false })
         .limit(8)
+      
       if (data) setTransactions(data)
     }
     fetchTransactions()
@@ -67,30 +72,36 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell className="text-xs">
-                  {new Date(t.created_at).toLocaleDateString('es-CO')}
-                </TableCell>
-                <TableCell className={cn(
-                  "font-bold",
-                  t.tipo?.trim() === "Ingreso" ? "text-emerald-500" : "text-red-500"
-                )}>
-                  {t.tipo?.trim() === "Ingreso" ? "+" : "-"} {formatCurrency(t.monto)}
-                </TableCell>
-                <TableCell>
-                  <span className={cn(
-                    "px-2 py-1 rounded-md text-[10px] font-bold border",
-                    getCategoryStyle(t.categoria)
-                  )}>
-                    {t.categoria || "General"}
-                  </span>
-                </TableCell>
-                <TableCell className="max-w-[150px] truncate text-sm">
-                  {t.descripcion}
-                </TableCell>
+            {transactions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center opacity-50">No hay transacciones aún</TableCell>
               </TableRow>
-            ))}
+            ) : (
+              transactions.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="text-xs">
+                    {new Date(t.created_at).toLocaleDateString('es-CO')}
+                  </TableCell>
+                  <TableCell className={cn(
+                    "font-bold",
+                    t.tipo?.trim() === "Ingreso" ? "text-emerald-500" : "text-red-500"
+                  )}>
+                    {t.tipo?.trim() === "Ingreso" ? "+" : "-"} {formatCurrency(t.monto)}
+                  </TableCell>
+                  <TableCell>
+                    <span className={cn(
+                      "px-2 py-1 rounded-md text-[10px] font-bold border",
+                      getCategoryStyle(t.categoria)
+                    )}>
+                      {t.categoria || "General"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-[150px] truncate text-sm">
+                    {t.descripcion}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </CardContent>
