@@ -89,9 +89,9 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({
-  totalIncome = 4850000,
-  totalExpenses = 2340000,
-  currentBalance = 2510000,
+  totalIncome = 0,
+  totalExpenses = 0,
+  currentBalance = 0,
   cardColor,
   textColor,
   primaryColor,
