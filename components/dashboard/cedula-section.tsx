@@ -40,7 +40,7 @@ export function CedulaSection({
   const supabase = createClient()
 
   // URL de tu bot Lex Finanzas
-  const TELEGRAM_BOT_URL = "https://t.me/lex_finanzas_bot"
+  const TELEGRAM_BOT_URL = "https://t.me/Lex_Mis_Finanzas_bot"
 
   const handleUpdateAndRedirect = async (e: React.FormEvent) => {
     e.preventDefault()
