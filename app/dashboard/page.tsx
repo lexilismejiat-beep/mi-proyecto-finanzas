@@ -28,22 +28,52 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  
+  // Estado para guardar los totales de dinero real
+  const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
+  
   const supabase = createClient()
   const { theme } = useThemeSettings()
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
+      
       if (user) {
-        const { data } = await supabase
+        // 1. Traer el perfil del usuario
+        const { data: profileData } = await supabase
           .from("user_profiles")
           .select("*")
           .eq("id", user.id)
           .single()
-        setProfile(data)
+        setProfile(profileData)
+
+        // 2. Traer los datos de la tabla "transacciones"
+        const { data: transData } = await supabase
+          .from("transacciones")
+          .select("monto, tipo")
+
+        if (transData) {
+          // Calculamos los ingresos sumando solo los tipos "Ingreso"
+          const income = transData
+            .filter((t) => t.tipo === "Ingreso")
+            .reduce((acc, t) => acc + (Number(t.monto) || 0), 0)
+          
+          // Calculamos los gastos sumando solo los tipos "Egreso"
+          const expenses = transData
+            .filter((t) => t.tipo === "Egreso")
+            .reduce((acc, t) => acc + (Number(t.monto) || 0), 0)
+
+          setTotals({
+            income,
+            expenses,
+            balance: income - expenses
+          })
+        }
       }
     }
-    fetchProfile()
+    
+    fetchData()
   }, [supabase])
 
   const userName = profile 
@@ -52,7 +82,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Sidebar */}
       <Sidebar 
         collapsed={sidebarCollapsed} 
         onCollapsedChange={setSidebarCollapsed}
@@ -61,7 +90,6 @@ export default function DashboardPage() {
         sidebarColor={theme.sidebar_color}
       />
 
-      {/* Main Content */}
       <div
         className={cn(
           "transition-all duration-300",
@@ -69,16 +97,13 @@ export default function DashboardPage() {
           sidebarCollapsed && "lg:ml-16"
         )}
       >
-        {/* Top Bar */}
         <TopBar 
           userName={userName}
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        {/* Page Content */}
         <main className="p-6">
-          {/* Page Header */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold" style={{ color: theme.text_color }}>
               Resumen Financiero
@@ -88,19 +113,23 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats Cards: Ahora le pasamos los datos calculados de Supabase */}
           <div className="mb-6">
-            <StatsCards cardColor={theme.card_color} textColor={theme.text_color} primaryColor={theme.primary_color} />
+            <StatsCards 
+              totalIncome={totals.income}
+              totalExpenses={totals.expenses}
+              currentBalance={totals.balance}
+              cardColor={theme.card_color} 
+              textColor={theme.text_color} 
+              primaryColor={theme.primary_color} 
+            />
           </div>
 
-          {/* Main Grid */}
           <div className="grid gap-6 lg:grid-cols-3">
-            {/* Transactions Table - Takes 2/3 width on large screens */}
             <div className="lg:col-span-2">
               <TransactionsTable cardColor={theme.card_color} textColor={theme.text_color} />
             </div>
 
-            {/* Cedula Section - Takes 1/3 width on large screens */}
             <div className="lg:col-span-1">
               <CedulaSection 
                 profile={profile}
