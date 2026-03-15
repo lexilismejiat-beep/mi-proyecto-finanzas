@@ -24,7 +24,7 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 1. Cargar Perfil
+      // 1. Cargar Perfil del usuario actual
       const { data: profileData } = await supabase
         .from("user_profiles")
         .select("*")
@@ -32,18 +32,17 @@ export default function DashboardPage() {
         .single()
       setProfile(profileData)
 
-      // 2. Cargar y Calcular Transacciones Reales
+      // 2. Cargar y Calcular Transacciones filtradas por el usuario actual
       const { data: transData } = await supabase
         .from("transacciones")
         .select("monto, tipo")
+        .eq("user_id", user.id) // <--- ESTO FILTRA TUS DATOS
 
       if (transData) {
-        // Sumamos Ingresos (limpiando espacios y asegurando que sea número)
         const income = transData
           .filter((t: any) => t.tipo?.trim() === "Ingreso")
           .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
         
-        // Sumamos Egresos
         const expenses = transData
           .filter((t: any) => t.tipo?.trim() === "Egreso")
           .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
@@ -79,7 +78,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="mb-6">
-            {/* ENVIAMOS LOS TOTALES REALES AQUÍ */}
             <StatsCards 
               totalIncome={totals.income} 
               totalExpenses={totals.expenses} 
