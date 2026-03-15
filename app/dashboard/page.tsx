@@ -55,14 +55,13 @@ export default function DashboardPage() {
 
         if (transData) {
           // Calculamos los ingresos sumando solo los tipos "Ingreso"
-          const income = transData
-            .filter((t) => t.tipo === "Ingreso")
-            .reduce((acc, t) => acc + (Number(t.monto) || 0), 0)
-          
-          // Calculamos los gastos sumando solo los tipos "Egreso"
-          const expenses = transData
-            .filter((t) => t.tipo === "Egreso")
-            .reduce((acc, t) => acc + (Number(t.monto) || 0), 0)
+         const income = transData
+  .filter((t) => t.tipo.trim() === "Ingreso")
+  .reduce((acc, t) => acc + parseFloat(t.monto || 0), 0)
+
+const expenses = transData
+  .filter((t) => t.tipo.trim() === "Egreso")
+  .reduce((acc, t) => acc + parseFloat(t.monto || 0), 0)
 
           setTotals({
             income,
