@@ -24,19 +24,20 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 1. Cargar Perfil del usuario actual
+      // 1. Cargar Perfil usando la tabla 'profiles' (la que ya tiene tu cédula)
       const { data: profileData } = await supabase
-        .from("user_profiles")
+        .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single()
+      
       setProfile(profileData)
 
-      // 2. Cargar y Calcular Transacciones filtradas por el usuario actual
+      // 2. Cargar Transacciones filtradas por el UUID del usuario
       const { data: transData } = await supabase
         .from("transacciones")
         .select("monto, tipo")
-        .eq("user_id", user.id) // <--- ESTO FILTRA TUS DATOS
+        .eq("user_id", user.id)
 
       if (transData) {
         const income = transData
@@ -68,7 +69,8 @@ export default function DashboardPage() {
       />
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
-          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          // Ajustado para usar full_name de la tabla profiles
+          userName={profile?.full_name || profile?.email || "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
