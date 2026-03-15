@@ -13,32 +13,22 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
-interface Transaction {
-  id: number
-  created_at: string
-  monto: number
-  tipo: string
-  categoria: string
-  descripcion: string
-}
-
 export function TransactionsTable({ cardColor, textColor }: { cardColor?: string, textColor?: string }) {
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const supabase = createClient()
 
-  // 1. Función para asignar colores vivos a las categorías
+  // Función de colores ajustada a tus datos reales
   const getCategoryStyle = (category: string) => {
-    const colors: { [key: string]: string } = {
-      Sueldo: "bg-emerald-100 text-emerald-700 border-emerald-200",
-      Trading: "bg-blue-100 text-blue-700 border-blue-200",
-      Cena: "bg-orange-100 text-orange-700 border-orange-200",
-      Mercado: "bg-purple-100 text-purple-700 border-purple-200",
-      Transporte: "bg-slate-100 text-slate-700 border-slate-200",
-      Ocio: "bg-pink-100 text-pink-700 border-pink-200",
-      Restaurante: "bg-amber-100 text-amber-700 border-amber-200",
+    const cat = category?.toLowerCase().trim()
+    const styles: { [key: string]: string } = {
+      sueldo: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      trading: "bg-blue-100 text-blue-700 border-blue-200",
+      cena: "bg-orange-100 text-orange-700 border-orange-200",
+      mercado: "bg-purple-100 text-purple-700 border-purple-200",
+      compra: "bg-pink-100 text-pink-700 border-pink-200",
+      ocio: "bg-indigo-100 text-indigo-700 border-indigo-200",
     }
-    // Si la categoría no está en la lista, da un color gris suave por defecto
-    return colors[category] || "bg-gray-100 text-gray-700 border-gray-200"
+    return styles[cat] || "bg-gray-100 text-gray-700 border-gray-200"
   }
 
   useEffect(() => {
@@ -48,7 +38,6 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
         .select("*")
         .order("created_at", { ascending: false })
         .limit(8)
-      
       if (data) setTransactions(data)
     }
     fetchTransactions()
@@ -78,38 +67,30 @@ export function TransactionsTable({ cardColor, textColor }: { cardColor?: string
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center opacity-50">No hay transacciones aún</TableCell>
-              </TableRow>
-            ) : (
-              transactions.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="text-xs">
-                    {new Date(t.created_at).toLocaleDateString('es-CO')}
-                  </TableCell>
-                  <TableCell className={cn(
-                    "font-medium",
-                    // Se asegura de comparar ignorando espacios
-                    t.tipo?.trim() === "Ingreso" ? "text-emerald-500" : "text-red-500"
+            {transactions.map((t) => (
+              <TableRow key={t.id}>
+                <TableCell className="text-xs">
+                  {new Date(t.created_at).toLocaleDateString('es-CO')}
+                </TableCell>
+                <TableCell className={cn(
+                  "font-bold",
+                  t.tipo?.trim() === "Ingreso" ? "text-emerald-500" : "text-red-500"
+                )}>
+                  {t.tipo?.trim() === "Ingreso" ? "+" : "-"} {formatCurrency(t.monto)}
+                </TableCell>
+                <TableCell>
+                  <span className={cn(
+                    "px-2 py-1 rounded-md text-[10px] font-bold border",
+                    getCategoryStyle(t.categoria)
                   )}>
-                    {t.tipo?.trim() === "Ingreso" ? "+" : "-"} {formatCurrency(t.monto)}
-                  </TableCell>
-                  <TableCell>
-                    {/* 2. Etiqueta con color dinámico */}
-                    <span className={cn(
-                      "px-2 py-1 rounded-md text-[10px] font-bold border",
-                      getCategoryStyle(t.categoria)
-                    )}>
-                      {t.categoria || "General"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="max-w-[150px] truncate text-sm">
-                    {t.descripcion}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+                    {t.categoria || "General"}
+                  </span>
+                </TableCell>
+                <TableCell className="max-w-[150px] truncate text-sm">
+                  {t.descripcion}
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </CardContent>
