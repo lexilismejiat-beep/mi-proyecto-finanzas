@@ -49,9 +49,17 @@ export default function DashboardPage() {
         setProfile(profileData)
 
         // 2. Traer los datos de la tabla "transacciones"
-        const { data: transData } = await supabase
-          .from("transacciones")
-          .select("monto, tipo")
+        // ... dentro del useEffect, después de calcular los totals ...
+const { data: transData } = await supabase
+  .from("transacciones")
+  .select("*") // Ahora traemos todo (*) para ver descripción, fecha, etc.
+  .order('created_at', { ascending: false }) // Las más nuevas primero
+  .limit(10) // Solo las últimas 10
+
+// Crea un nuevo estado para guardar la lista
+const [recentTransactions, setRecentTransactions] = useState([])
+// ... y en el fetchData haces:
+setRecentTransactions(transData || [])
 
         if (transData) {
           // Calculamos los ingresos sumando solo los tipos "Ingreso"
