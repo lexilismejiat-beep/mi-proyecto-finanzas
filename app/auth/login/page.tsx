@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -24,15 +25,17 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Unexpected error:", error)
     } finally {
+      // Nota: A menudo el redireccionamiento ocurre antes de llegar aquí
       setIsLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <Card className="w-full max-w-md shadow-xl border-0">
+      <Card className="w-full max-w-md shadow-2xl border-0 bg-white dark:bg-gray-900">
         <CardHeader className="text-center space-y-4 pb-2">
-          <div className="mx-auto w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center">
+          {/* Logo Icon */}
+          <div className="mx-auto w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200 dark:shadow-none">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -49,6 +52,7 @@ export default function LoginPage() {
               <path d="m15 18-2-2" />
             </svg>
           </div>
+          
           <div>
             <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
               Finanzas Personales
@@ -58,18 +62,26 @@ export default function LoginPage() {
             </CardDescription>
           </div>
         </CardHeader>
+
         <CardContent className="space-y-6 pt-6">
           <div className="space-y-4">
+            {/* BOTÓN DE GOOGLE OPTIMIZADO */}
             <Button
               onClick={handleGoogleLogin}
               disabled={isLoading}
-              className="w-full h-12 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 shadow-sm"
               variant="outline"
+              className={cn(
+                "w-full h-12 text-base font-semibold transition-all duration-200",
+                "bg-white text-gray-900 border-gray-300 shadow-sm", // Fondo blanco puro
+                "hover:bg-gray-50 hover:border-gray-400 hover:shadow-md", // Hover sutil
+                "active:scale-[0.98]", // Efecto de clic
+                isLoading && "opacity-80 cursor-not-allowed bg-white" // Mantener blanco aunque cargue
+              )}
             >
               {isLoading ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                  <span>Conectando...</span>
+                  <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-gray-600">Conectando...</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
@@ -91,19 +103,19 @@ export default function LoginPage() {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span className="font-medium">Continuar con Google</span>
+                  <span>Continuar con Google</span>
                 </div>
               )}
             </Button>
           </div>
           
-          <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+          <div className="text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             <p>Al iniciar sesión, aceptas nuestros</p>
-            <p>
-              <a href="#" className="text-emerald-600 hover:underline">Términos de servicio</a>
-              {" y "}
-              <a href="#" className="text-emerald-600 hover:underline">Política de privacidad</a>
-            </p>
+            <div className="flex flex-wrap justify-center gap-1">
+              <a href="#" className="text-emerald-600 font-medium hover:underline">Términos de servicio</a>
+              <span>y</span>
+              <a href="#" className="text-emerald-600 font-medium hover:underline">Política de privacidad</a>
+            </div>
           </div>
         </CardContent>
       </Card>
