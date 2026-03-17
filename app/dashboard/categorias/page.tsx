@@ -73,7 +73,7 @@ export default function CategoriasPage() {
       const { data } = await supabase
         .from('transacciones')
         .select('*')
-        .eq('cedula_usuario', profile.cedula) // Filtro por usuario
+        .eq('cedula', profile.cedula) // Filtro por usuario
         .gte('created_at', range.from.toISOString())
         .lte('created_at', range.to.toISOString())
       
