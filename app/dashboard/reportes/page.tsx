@@ -6,7 +6,7 @@ import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, Calendar, Loader2, TrendingUp, TrendingDown } from "lucide-react"
+import { Download, Loader2, TrendingUp, TrendingDown } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 import {
@@ -31,18 +31,28 @@ export default function ReportesPage() {
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: p } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
-          setProfile(p)
-        }
+        if (!user) return
 
-        const { data: t } = await supabase
-          .from('transacciones')
-          .select('*')
+        // 1. Obtener perfil para sacar la cédula (igual que en tu Dashboard)
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single()
         
-        if (t) setTransactions(t)
+        setProfile(profileData)
+
+        // 2. Obtener transacciones usando la cédula como vínculo
+        if (profileData?.cedula) {
+          const { data: transData } = await supabase
+            .from("transacciones")
+            .select("*")
+            .eq("user_id", profileData.cedula)
+          
+          if (transData) setTransactions(transData)
+        }
       } catch (err) {
-        console.error("Error cargando reportes:", err)
+        console.error("Error en reportes:", err)
       } finally {
         setLoading(false)
       }
@@ -50,43 +60,41 @@ export default function ReportesPage() {
     fetchData()
   }, [supabase])
 
-  // Lógica de procesamiento de datos corregida para evaluar GASTOS
+  // Lógica de procesamiento de datos sincronizada con tu estructura de DB
   const { categoryData, monthlyData, stats } = useMemo(() => {
     const cats: Record<string, number> = {}
     const months: Record<string, any> = {}
-    let totalIngresos = 0
-    let totalGastos = 0
+    let totalIncome = 0
+    let totalExpenses = 0
 
     transactions.forEach((t) => {
-      const monto = parseFloat(t.monto) || 0
+      const monto = Number(t.monto) || 0
+      const tipo = t.tipo?.trim() // "Ingreso" o "Egreso"
       const cat = t.categoria || "Otros"
+      
+      // Manejo de fecha
       const date = t.created_at ? new Date(t.created_at) : new Date()
       const monthLabel = date.toLocaleString('es-ES', { month: 'short' }).toUpperCase()
 
-      // Clasificación de Gastos e Ingresos
-      if (monto < 0) {
-        const valorAbsoluto = Math.abs(monto)
-        cats[cat] = (cats[cat] || 0) + valorAbsoluto
-        totalGastos += valorAbsoluto
-      } else if (monto > 0) {
-        totalIngresos += monto
-      }
-
-      // Preparación para Gráfica Mensual
       if (!months[monthLabel]) {
         months[monthLabel] = { name: monthLabel, ingresos: 0, gastos: 0 }
       }
-      if (monto > 0) {
+
+      if (tipo === "Ingreso") {
+        totalIncome += monto
         months[monthLabel].ingresos += monto
-      } else {
-        months[monthLabel].gastos += Math.abs(monto)
+      } else if (tipo === "Egreso") {
+        totalExpenses += monto
+        months[monthLabel].gastos += monto
+        // Llenar datos para la gráfica de torta (solo egresos)
+        cats[cat] = (cats[cat] || 0) + monto
       }
     })
 
     return {
       categoryData: Object.entries(cats).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value),
       monthlyData: Object.values(months),
-      stats: { totalIngresos, totalGastos, balance: totalIngresos - totalGastos }
+      stats: { totalIncome, totalExpenses, balance: totalIncome - totalExpenses }
     }
   }, [transactions])
 
@@ -94,7 +102,7 @@ export default function ReportesPage() {
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(value)
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen" style={{ backgroundColor: theme.card_color === '#ffffff' ? '#f4f4f5' : '#0a0a0a' }}>
       <Sidebar 
         collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed}
         mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen}
@@ -103,62 +111,62 @@ export default function ReportesPage() {
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
-          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          userName={profile?.full_name || "Usuario"} 
+          avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="p-4 sm:p-6 lg:p-8 space-y-6">
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Reportes Financieros</h1>
-              <p className="text-gray-400">Visualización de tus ingresos y gastos reales</p>
-            </div>
-            <div className="flex gap-2">
-              <Button className="bg-emerald-600 hover:bg-emerald-700">
-                <Download className="h-4 w-4 mr-2" /> Exportar PDF
-              </Button>
-            </div>
-          </header>
+        <main className="p-6 space-y-6">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold" style={{ color: theme.text_color }}>Análisis Detallado</h1>
+            <Button className="gap-2" style={{ backgroundColor: theme.primary_color }}>
+              <Download size={18} /> Exportar PDF
+            </Button>
+          </div>
 
           {loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-            </div>
+            <div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin" /></div>
           ) : (
             <>
-              {/* Tarjetas de Resumen */}
+              {/* Tarjetas de Resumen Sincronizadas */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-[#121212] border-white/10 p-4">
-                  <p className="text-gray-400 text-sm">Balance Total</p>
-                  <h2 className={cn("text-2xl font-bold", stats.balance >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                    {formatCurrency(stats.balance)}
-                  </h2>
+                <Card style={{ backgroundColor: theme.card_color, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <CardContent className="pt-6">
+                    <p className="text-sm opacity-70" style={{ color: theme.text_color }}>Balance General</p>
+                    <h2 className="text-2xl font-bold" style={{ color: stats.balance >= 0 ? '#10b981' : '#ef4444' }}>
+                      {formatCurrency(stats.balance)}
+                    </h2>
+                  </CardContent>
                 </Card>
-                <Card className="bg-[#121212] border-white/10 p-4">
-                  <p className="text-gray-400 text-sm flex items-center gap-1 text-emerald-500">
-                    <TrendingUp size={14} className="mr-1" /> Total Ingresos
-                  </p>
-                  <h2 className="text-2xl font-bold text-white">{formatCurrency(stats.totalIngresos)}</h2>
+                <Card style={{ backgroundColor: theme.card_color, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <CardContent className="pt-6">
+                    <p className="text-sm opacity-70 flex items-center gap-2" style={{ color: theme.text_color }}>
+                      <TrendingUp size={16} className="text-emerald-500" /> Ingresos Totales
+                    </p>
+                    <h2 className="text-2xl font-bold" style={{ color: theme.text_color }}>{formatCurrency(stats.totalIncome)}</h2>
+                  </CardContent>
                 </Card>
-                <Card className="bg-[#121212] border-white/10 p-4">
-                  <p className="text-gray-400 text-sm flex items-center gap-1 text-rose-500">
-                    <TrendingDown size={14} className="mr-1" /> Total Gastos
-                  </p>
-                  <h2 className="text-2xl font-bold text-white">{formatCurrency(stats.totalGastos)}</h2>
+                <Card style={{ backgroundColor: theme.card_color, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <CardContent className="pt-6">
+                    <p className="text-sm opacity-70 flex items-center gap-2" style={{ color: theme.text_color }}>
+                      <TrendingDown size={16} className="text-rose-500" /> Gastos Totales
+                    </p>
+                    <h2 className="text-2xl font-bold" style={{ color: theme.text_color }}>{formatCurrency(stats.totalExpenses)}</h2>
+                  </CardContent>
                 </Card>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Flujo Mensual */}
-                <Card className="bg-[#121212] border-white/10">
-                  <CardHeader><CardTitle className="text-base text-white">Ingresos vs Gastos por Mes</CardTitle></CardHeader>
-                  <CardContent className="h-[300px]">
+                {/* Gráfica de Barras Mensual */}
+                <Card style={{ backgroundColor: theme.card_color, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <CardHeader><CardTitle style={{ color: theme.text_color }}>Comparativa Mensual</CardTitle></CardHeader>
+                  <CardContent className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={monthlyData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-                        <XAxis dataKey="name" stroke="#737373" fontSize={12} />
-                        <YAxis stroke="#737373" fontSize={12} tickFormatter={(v) => `$${v/1000}k`} />
-                        <Tooltip contentStyle={{ backgroundColor: "#121212", border: "1px solid #262626" }} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                        <XAxis dataKey="name" stroke={theme.text_color} fontSize={12} opacity={0.5} />
+                        <YAxis stroke={theme.text_color} fontSize={12} opacity={0.5} tickFormatter={(v) => `$${v/1000}k`} />
+                        <Tooltip contentStyle={{ backgroundColor: theme.card_color, border: '1px solid rgba(255,255,255,0.1)' }} />
                         <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} name="Ingresos" />
                         <Bar dataKey="gastos" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastos" />
                       </BarChart>
@@ -166,10 +174,10 @@ export default function ReportesPage() {
                   </CardContent>
                 </Card>
 
-                {/* Gastos por Categoría */}
-                <Card className="bg-[#121212] border-white/10">
-                  <CardHeader><CardTitle className="text-base text-white">Distribución de Gastos</CardTitle></CardHeader>
-                  <CardContent className="h-[300px]">
+                {/* Distribución por Categoría */}
+                <Card style={{ backgroundColor: theme.card_color, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <CardHeader><CardTitle style={{ color: theme.text_color }}>Gastos por Categoría</CardTitle></CardHeader>
+                  <CardContent className="h-80">
                     {categoryData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -182,14 +190,12 @@ export default function ReportesPage() {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ backgroundColor: "#121212", border: "1px solid #262626" }} />
-                          <Legend verticalAlign="bottom" height={36}/>
+                          <Tooltip contentStyle={{ backgroundColor: theme.card_color, border: '1px solid rgba(255,255,255,0.1)' }} />
+                          <Legend />
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex h-full items-center justify-center text-gray-500 text-sm italic">
-                        No hay gastos registrados para mostrar
-                      </div>
+                      <div className="flex h-full items-center justify-center opacity-50 italic">No hay gastos para mostrar</div>
                     )}
                   </CardContent>
                 </Card>
