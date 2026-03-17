@@ -36,7 +36,7 @@ export default function ReportesPage() {
           setProfile(p)
         }
 
-        const { data: t, error } = await supabase
+        const { data: t } = await supabase
           .from('transacciones')
           .select('*')
         
@@ -50,7 +50,7 @@ export default function ReportesPage() {
     fetchData()
   }, [supabase])
 
-  // Lógica de procesamiento de datos corregida
+  // Lógica de procesamiento de datos corregida para evaluar GASTOS
   const { categoryData, monthlyData, stats } = useMemo(() => {
     const cats: Record<string, number> = {}
     const months: Record<string, any> = {}
@@ -58,29 +58,33 @@ export default function ReportesPage() {
     let totalGastos = 0
 
     transactions.forEach((t) => {
-      const monto = Number(t.monto) || 0
+      const monto = parseFloat(t.monto) || 0
       const cat = t.categoria || "Otros"
-      const date = new Date(t.created_at || new Date())
+      const date = t.created_at ? new Date(t.created_at) : new Date()
       const monthLabel = date.toLocaleString('es-ES', { month: 'short' }).toUpperCase()
 
-      // Por Categoría (Gastos)
+      // Clasificación de Gastos e Ingresos
       if (monto < 0) {
-        cats[cat] = (cats[cat] || 0) + Math.abs(monto)
-        totalGastos += Math.abs(monto)
-      } else {
+        const valorAbsoluto = Math.abs(monto)
+        cats[cat] = (cats[cat] || 0) + valorAbsoluto
+        totalGastos += valorAbsoluto
+      } else if (monto > 0) {
         totalIngresos += monto
       }
 
-      // Por Mes
+      // Preparación para Gráfica Mensual
       if (!months[monthLabel]) {
         months[monthLabel] = { name: monthLabel, ingresos: 0, gastos: 0 }
       }
-      if (monto > 0) months[monthLabel].ingresos += monto
-      else months[monthLabel].gastos += Math.abs(monto)
+      if (monto > 0) {
+        months[monthLabel].ingresos += monto
+      } else {
+        months[monthLabel].gastos += Math.abs(monto)
+      }
     })
 
     return {
-      categoryData: Object.entries(cats).map(([name, value]) => ({ name, value })),
+      categoryData: Object.entries(cats).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value),
       monthlyData: Object.values(months),
       stats: { totalIngresos, totalGastos, balance: totalIngresos - totalGastos }
     }
@@ -104,12 +108,17 @@ export default function ReportesPage() {
         />
 
         <main className="p-4 sm:p-6 lg:p-8 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Reportes Financieros</h1>
-              <p className="text-gray-400">Análisis detallado de tus movimientos reales</p>
+              <p className="text-gray-400">Visualización de tus ingresos y gastos reales</p>
             </div>
-          </div>
+            <div className="flex gap-2">
+              <Button className="bg-emerald-600 hover:bg-emerald-700">
+                <Download className="h-4 w-4 mr-2" /> Exportar PDF
+              </Button>
+            </div>
+          </header>
 
           {loading ? (
             <div className="flex h-64 items-center justify-center">
@@ -117,7 +126,7 @@ export default function ReportesPage() {
             </div>
           ) : (
             <>
-              {/* Tarjetas de Resumen Rápido */}
+              {/* Tarjetas de Resumen */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-[#121212] border-white/10 p-4">
                   <p className="text-gray-400 text-sm">Balance Total</p>
@@ -126,19 +135,23 @@ export default function ReportesPage() {
                   </h2>
                 </Card>
                 <Card className="bg-[#121212] border-white/10 p-4">
-                  <p className="text-gray-400 text-sm flex items-center gap-1"><TrendingUp size={14} /> Total Ingresos</p>
-                  <h2 className="text-2xl font-bold text-emerald-500">{formatCurrency(stats.totalIngresos)}</h2>
+                  <p className="text-gray-400 text-sm flex items-center gap-1 text-emerald-500">
+                    <TrendingUp size={14} className="mr-1" /> Total Ingresos
+                  </p>
+                  <h2 className="text-2xl font-bold text-white">{formatCurrency(stats.totalIngresos)}</h2>
                 </Card>
                 <Card className="bg-[#121212] border-white/10 p-4">
-                  <p className="text-gray-400 text-sm flex items-center gap-1"><TrendingDown size={14} /> Total Gastos</p>
-                  <h2 className="text-2xl font-bold text-rose-500">{formatCurrency(stats.totalGastos)}</h2>
+                  <p className="text-gray-400 text-sm flex items-center gap-1 text-rose-500">
+                    <TrendingDown size={14} className="mr-1" /> Total Gastos
+                  </p>
+                  <h2 className="text-2xl font-bold text-white">{formatCurrency(stats.totalGastos)}</h2>
                 </Card>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Gráfica de Barras */}
-                <Card className="bg-[#121212] border-white/10 overflow-hidden">
-                  <CardHeader><CardTitle className="text-base text-white">Flujo Mensual</CardTitle></CardHeader>
+                {/* Flujo Mensual */}
+                <Card className="bg-[#121212] border-white/10">
+                  <CardHeader><CardTitle className="text-base text-white">Ingresos vs Gastos por Mes</CardTitle></CardHeader>
                   <CardContent className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={monthlyData}>
@@ -153,25 +166,31 @@ export default function ReportesPage() {
                   </CardContent>
                 </Card>
 
-                {/* Gráfica de Torta */}
+                {/* Gastos por Categoría */}
                 <Card className="bg-[#121212] border-white/10">
-                  <CardHeader><CardTitle className="text-base text-white">Gastos por Categoría</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-base text-white">Distribución de Gastos</CardTitle></CardHeader>
                   <CardContent className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={categoryData}
-                          innerRadius={60} outerRadius={80}
-                          paddingAngle={5} dataKey="value"
-                        >
-                          {categoryData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: "#121212", border: "1px solid #262626" }} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {categoryData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categoryData}
+                            innerRadius={60} outerRadius={80}
+                            paddingAngle={5} dataKey="value"
+                          >
+                            {categoryData.map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: "#121212", border: "1px solid #262626" }} />
+                          <Legend verticalAlign="bottom" height={36}/>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-gray-500 text-sm italic">
+                        No hay gastos registrados para mostrar
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
