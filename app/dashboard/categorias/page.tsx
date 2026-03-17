@@ -56,7 +56,7 @@ export default function CategoriasPage() {
       const { data, error } = await supabase
         .from('transacciones')
         .select('*')
-        .eq('cedula_usuario', profile.cedula) // Filtro esencial para ver solo tus datos
+        .eq('cedula', profile.cedula) // Filtro esencial para ver solo tus datos
       
       if (data) setTransactions(data)
       setLoading(false)
