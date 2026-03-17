@@ -14,7 +14,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts"
 
-// Librerías
+// Librerías de Exportación
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 
@@ -43,46 +43,32 @@ export default function ReportesPage() {
 
   const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"]
 
-  // --- FUNCIÓN DE EXPORTACIÓN REFORZADA ---
+  // --- FUNCIÓN DE EXPORTACIÓN OPTIMIZADA ---
   const exportToPDF = async () => {
     if (!reportRef.current) return
     setIsExporting(true)
 
     try {
-      // Forzamos un pequeño delay para que el estado de las gráficas sea estático
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Pequeña espera para asegurar que el DOM esté estable
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
-      const element = reportRef.current
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#0a0a0a", // Forzamos el color de fondo oscuro
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 1.5, // Resolución equilibrada para evitar errores de memoria
+        useCORS: true, 
         logging: false,
-        onclone: (clonedDoc) => {
-          // Aseguramos que el elemento sea visible en el clon
-          const el = clonedDoc.getElementById("pdf-content")
-          if (el) el.style.padding = "20px"
-        }
+        backgroundColor: "#0a0a0a", // Mantiene el fondo oscuro del dashboard
       })
       
-      const imgData = canvas.toDataURL("image/png")
-      const pdf = new jsPDF({
-        orientation: "p",
-        unit: "mm",
-        format: "a4"
-      })
-
-      const imgProps = pdf.getImageProperties(imgData)
+      const imgData = canvas.toDataURL("image/jpeg", 0.8)
+      const pdf = new jsPDF("p", "mm", "a4")
       const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
       pdf.save(`Reporte_Financiero_${format(new Date(), "dd-MM-yyyy")}.pdf`)
-      
     } catch (error) {
-      console.error("Error crítico al generar PDF:", error)
-      alert("No se pudo generar el PDF. Revisa si hay bloqueadores de pop-ups.")
+      console.error("Error al exportar:", error)
+      alert("Error al generar PDF. Intenta de nuevo.")
     } finally {
       setIsExporting(false)
     }
@@ -186,24 +172,24 @@ export default function ReportesPage() {
             </div>
           </div>
 
-          {/* CONTENEDOR CON ID PARA EL CLONADO */}
-          <div ref={reportRef} id="pdf-content" className="space-y-6 bg-[#0a0a0a]">
+          {/* ÁREA DE CAPTURA */}
+          <div ref={reportRef} className="space-y-6 p-4 bg-[#0a0a0a]">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="bg-[#121212] border-white/10">
+              <Card className="bg-[#121212] border-white/10 shadow-2xl">
                 <CardContent className="pt-6">
                   <p className="text-gray-400 text-sm">Balance General</p>
                   <h2 className={cn("text-2xl font-bold mt-1", stats.balance >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatCurrency(stats.balance)}</h2>
                 </CardContent>
               </Card>
-              <Card className="bg-[#121212] border-white/10">
+              <Card className="bg-[#121212] border-white/10 shadow-2xl">
                 <CardContent className="pt-6">
-                  <p className="text-gray-400 text-sm flex items-center gap-2"><TrendingUp size={16} className="text-emerald-500" /> Ingresos</p>
+                  <p className="text-gray-400 text-sm flex items-center gap-2"><TrendingUp size={16} className="text-emerald-500" /> Ingresos Totales</p>
                   <h2 className="text-2xl font-bold mt-1">{formatCurrency(stats.totalIncome)}</h2>
                 </CardContent>
               </Card>
-              <Card className="bg-[#121212] border-white/10">
+              <Card className="bg-[#121212] border-white/10 shadow-2xl">
                 <CardContent className="pt-6">
-                  <p className="text-gray-400 text-sm flex items-center gap-2"><TrendingDown size={16} className="text-rose-500" /> Gastos</p>
+                  <p className="text-gray-400 text-sm flex items-center gap-2"><TrendingDown size={16} className="text-rose-500" /> Gastos Totales</p>
                   <h2 className="text-2xl font-bold mt-1">{formatCurrency(stats.totalExpenses)}</h2>
                 </CardContent>
               </Card>
@@ -211,7 +197,7 @@ export default function ReportesPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="bg-[#121212] border-white/10 p-4">
-                <CardTitle className="text-lg mb-4">Comparativa Mensual</CardTitle>
+                <CardTitle className="text-lg mb-4 text-gray-200">Comparativa Mensual</CardTitle>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData}>
@@ -219,7 +205,6 @@ export default function ReportesPage() {
                       <XAxis dataKey="name" stroke="#737373" />
                       <YAxis stroke="#737373" />
                       <Tooltip contentStyle={{ backgroundColor: "#121212", border: "1px solid #262626" }} />
-                      {/* Desactivamos animación durante exportación */}
                       <Bar dataKey="ingresos" fill="#10b981" isAnimationActive={false} />
                       <Bar dataKey="gastos" fill="#ef4444" isAnimationActive={false} />
                     </BarChart>
@@ -228,7 +213,7 @@ export default function ReportesPage() {
               </Card>
 
               <Card className="bg-[#121212] border-white/10 p-4">
-                <CardTitle className="text-lg mb-4">Gastos por Categoría</CardTitle>
+                <CardTitle className="text-lg mb-4 text-gray-200">Gastos por Categoría</CardTitle>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -236,7 +221,7 @@ export default function ReportesPage() {
                         {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                       </Pie>
                       <Tooltip />
-                      <Legend />
+                      <Legend iconType="circle" />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
