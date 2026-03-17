@@ -14,7 +14,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts"
 
-// PDF e Imagen
+// Librerías de Exportación
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 
@@ -27,7 +27,7 @@ import { es } from "date-fns/locale"
 export default function ReportesPage() {
   const supabase = createClient()
   const { theme } = useThemeSettings()
-  const reportRef = useRef<HTMLDivElement>(null) // Referencia para capturar el PDF
+  const reportRef = useRef<HTMLDivElement>(null)
   
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -43,17 +43,21 @@ export default function ReportesPage() {
 
   const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"]
 
-  // --- Lógica de exportación a PDF ---
+  // --- FUNCIÓN DE EXPORTACIÓN CORREGIDA ---
   const exportToPDF = async () => {
     if (!reportRef.current) return
     setIsExporting(true)
 
     try {
+      // 1. Esperar a que terminen las animaciones de Recharts
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
+      // 2. Capturar el contenedor
       const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        backgroundColor: "#0a0a0a", // Mantiene el fondo oscuro en el PDF
+        scale: 2, // Alta resolución
+        useCORS: true, // Para cargar imágenes externas si las hay
+        backgroundColor: "#0a0a0a", // Fondo oscuro igual al dashboard
         logging: false,
-        useCORS: true
       })
       
       const imgData = canvas.toDataURL("image/png")
@@ -62,9 +66,9 @@ export default function ReportesPage() {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width
 
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
-      pdf.save(`Reporte_Financiero_${format(new Date(), "yyyy-MM-dd")}.pdf`)
+      pdf.save(`Reporte_Finanzas_${format(new Date(), "dd_MM_yyyy")}.pdf`)
     } catch (error) {
-      console.error("Error al generar PDF:", error)
+      console.error("Error al exportar:", error)
     } finally {
       setIsExporting(false)
     }
@@ -91,7 +95,7 @@ export default function ReportesPage() {
           if (transData) setTransactions(transData)
         }
       } catch (err) {
-        console.error("Error:", err)
+        console.error("Error cargando datos:", err)
       } finally {
         setLoading(false)
       }
@@ -142,7 +146,10 @@ export default function ReportesPage() {
 
         <main className="p-6 space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h1 className="text-3xl font-bold tracking-tight">Análisis Detallado</h1>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Análisis Detallado</h1>
+              <p className="text-gray-400">Visualización de tus ingresos y gastos reales</p>
+            </div>
             
             <div className="flex items-center gap-2 bg-[#121212] p-2 rounded-xl border border-white/10">
               <Popover>
@@ -157,7 +164,6 @@ export default function ReportesPage() {
                 </PopoverContent>
               </Popover>
 
-              {/* BOTÓN DE EXPORTAR PDF HABILITADO */}
               <Button 
                 onClick={exportToPDF} 
                 disabled={isExporting}
@@ -169,7 +175,8 @@ export default function ReportesPage() {
             </div>
           </div>
 
-          <div ref={reportRef} className="space-y-6 p-2"> {/* Contenedor que se captura */}
+          {/* ESTE ES EL CONTENEDOR QUE SE CAPTURA PARA EL PDF */}
+          <div ref={reportRef} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="bg-[#121212] border-white/10 shadow-2xl">
                 <CardContent className="pt-6">
@@ -180,20 +187,22 @@ export default function ReportesPage() {
               <Card className="bg-[#121212] border-white/10 shadow-2xl">
                 <CardContent className="pt-6">
                   <p className="text-gray-400 text-sm flex items-center gap-2"><TrendingUp size={16} className="text-emerald-500" /> Ingresos Totales</p>
-                  <h2 className="text-2xl font-bold mt-1">{formatCurrency(stats.totalIncome)}</h2>
+                  <h2 className="text-2xl font-bold mt-1 text-white">{formatCurrency(stats.totalIncome)}</h2>
                 </CardContent>
               </Card>
               <Card className="bg-[#121212] border-white/10 shadow-2xl">
                 <CardContent className="pt-6">
                   <p className="text-gray-400 text-sm flex items-center gap-2"><TrendingDown size={16} className="text-rose-500" /> Gastos Totales</p>
-                  <h2 className="text-2xl font-bold mt-1">{formatCurrency(stats.totalExpenses)}</h2>
+                  <h2 className="text-2xl font-bold mt-1 text-white">{formatCurrency(stats.totalExpenses)}</h2>
                 </CardContent>
               </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="bg-[#121212] border-white/10 p-4">
-                <CardTitle className="text-lg mb-4 text-gray-200">Comparativa Mensual</CardTitle>
+                <CardHeader>
+                  <CardTitle className="text-lg font-medium text-gray-200">Comparativa Mensual</CardTitle>
+                </CardHeader>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData}>
@@ -201,19 +210,21 @@ export default function ReportesPage() {
                       <XAxis dataKey="name" stroke="#737373" />
                       <YAxis stroke="#737373" tickFormatter={(v) => `$${v/1000}k`} />
                       <Tooltip contentStyle={{ backgroundColor: "#121212", border: "1px solid #262626" }} />
-                      <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} isAnimationActive={!isExporting} />
+                      <Bar dataKey="gastos" fill="#ef4444" radius={[4, 4, 0, 0]} isAnimationActive={!isExporting} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </Card>
 
               <Card className="bg-[#121212] border-white/10 p-4">
-                <CardTitle className="text-lg mb-4 text-gray-200">Gastos por Categoría</CardTitle>
+                <CardHeader>
+                  <CardTitle className="text-lg font-medium text-gray-200">Gastos por Categoría</CardTitle>
+                </CardHeader>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={categoryData} innerRadius={60} outerRadius={80} dataKey="value">
+                      <Pie data={categoryData} innerRadius={60} outerRadius={80} dataKey="value" isAnimationActive={!isExporting}>
                         {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                       </Pie>
                       <Tooltip />
