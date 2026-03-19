@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Bell, Shield, Palette, Globe } from "lucide-react"
 
-// Importaciones necesarias para la data real
+// Integración con tu Backend y Temas
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
@@ -21,7 +21,6 @@ export default function ConfiguracionPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
   
   const supabase = createClient()
   const { theme } = useThemeSettings()
@@ -33,14 +32,11 @@ export default function ConfiguracionPage() {
     alerts: true,
   })
 
-  // Cargar datos reales del perfil al montar la página
   useEffect(() => {
     const fetchProfile = async () => {
-      setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Nota: Aquí uso "profiles" porque es la tabla que vimos en tus capturas de Supabase
       const { data: profileData } = await supabase
         .from("profiles") 
         .select("*")
@@ -48,23 +44,21 @@ export default function ConfiguracionPage() {
         .single()
       
       setProfile(profileData)
-      setLoading(false)
     }
     fetchProfile()
   }, [supabase])
 
-  // Función para manejar el nombre mostrado
-  const fullName = profile ? profile.full_name : "Usuario"
+  const fullName = profile?.full_name || "Usuario"
   const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().substring(0, 2)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <Sidebar 
         collapsed={sidebarCollapsed} 
         onCollapsedChange={setSidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onMobileOpenChange={setMobileSidebarOpen}
-        sidebarColor={theme.sidebar_color} // Aplicamos color de tema como en transacciones
+        sidebarColor={theme.sidebar_color}
       />
 
       <div
@@ -87,79 +81,79 @@ export default function ConfiguracionPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Profile Section */}
-            <Card style={{ backgroundColor: theme.card_color }}>
+            {/* Perfil - Forzado a modo oscuro con clases de Shadcn */}
+            <Card className="border-border bg-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2" style={{ color: theme.text_color }}>
-                  <Shield className="h-5 w-5" />
+                  <Shield className="h-5 w-5 text-primary" />
                   Perfil
                 </CardTitle>
-                <CardDescription>Actualiza tu información personal</CardDescription>
+                <CardDescription className="text-muted-foreground">Actualiza tu información personal</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <Avatar className="h-20 w-20">
+                    <Avatar className="h-20 w-20 border-2 border-border">
                       <AvatarImage src={profile?.avatar_url} />
-                      <AvatarFallback className="text-xl">{initials}</AvatarFallback>
+                      <AvatarFallback className="bg-muted text-xl">{initials}</AvatarFallback>
                     </Avatar>
                     <button 
-                      className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full text-white"
+                      className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-110"
                       style={{ backgroundColor: theme.primary_color }}
                     >
                       <Camera className="h-4 w-4" />
                     </button>
                   </div>
                   <div>
-                    <p className="font-medium" style={{ color: theme.text_color }}>{fullName}</p>
-                    <p className="text-sm text-muted-foreground">{profile?.email || "cargando..."}</p>
+                    <p className="font-medium text-foreground text-lg">{fullName}</p>
+                    <p className="text-sm text-muted-foreground">{profile?.email || "Cargando datos..."}</p>
                   </div>
                 </div>
 
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="name" style={{ color: theme.text_color }}>Nombre completo</Label>
-                    <Input id="name" defaultValue={fullName} />
+                    <Label htmlFor="name" className="text-foreground">Nombre completo</Label>
+                    <Input id="name" defaultValue={fullName} className="bg-muted/50 border-border text-foreground focus:ring-primary" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="email" style={{ color: theme.text_color }}>Correo electrónico</Label>
-                    <Input id="email" type="email" defaultValue={profile?.email} />
+                    <Label htmlFor="email" className="text-foreground">Correo electrónico</Label>
+                    <Input id="email" type="email" defaultValue={profile?.email} className="bg-muted/50 border-border text-foreground" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="phone" style={{ color: theme.text_color }}>Teléfono</Label>
-                    <Input id="phone" type="tel" defaultValue={profile?.phone || ""} />
+                    <Label htmlFor="phone" className="text-foreground">Teléfono</Label>
+                    <Input id="phone" type="tel" placeholder="+57 ..." className="bg-muted/50 border-border text-foreground" />
                   </div>
                 </div>
 
-                <Button style={{ backgroundColor: theme.primary_color }}>
+                <Button className="w-full sm:w-auto" style={{ backgroundColor: theme.primary_color }}>
                   Guardar cambios
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Telegram Link Section - El componente que ya tienes creado */}
+            {/* Telegram Link Section */}
             <CedulaSection />
 
-            {/* Notifications */}
-            <Card style={{ backgroundColor: theme.card_color }}>
+            {/* Notificaciones */}
+            <Card className="border-border bg-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2" style={{ color: theme.text_color }}>
-                  <Bell className="h-5 w-5" />
+                  <Bell className="h-5 w-5 text-primary" />
                   Notificaciones
                 </CardTitle>
-                <CardDescription>Configura cómo quieres recibir alertas</CardDescription>
+                <CardDescription className="text-muted-foreground">Configura tus alertas</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { id: 'email', label: 'Notificaciones por email', desc: 'Recibe resúmenes por correo' },
-                  { id: 'push', label: 'Notificaciones push', desc: 'Alertas en tiempo real' },
-                  { id: 'weekly', label: 'Resumen semanal', desc: 'Recibe un reporte cada lunes' },
-                  { id: 'alerts', label: 'Alertas de gastos', desc: 'Cuando superes tu presupuesto' },
+                  { id: 'email', label: 'Notificaciones por email', desc: 'Resúmenes periódicos' },
+                  { id: 'push', label: 'Notificaciones push', desc: 'Alertas inmediatas' },
+                  { id: 'weekly', label: 'Resumen semanal', desc: 'Reporte de gastos lunes' },
+                  { id: 'alerts', label: 'Alertas de gastos', desc: 'Control de presupuestos' },
                 ].map((item) => (
-                  <div key={item.id} className="flex items-center justify-between">
+                  <div key={item.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                     <div>
-                      <p className="font-medium" style={{ color: theme.text_color }}>{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.desc}</p>
+                      <p className="font-medium text-foreground">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
                     </div>
                     <Switch 
                       checked={(notifications as any)[item.id]} 
@@ -170,29 +164,29 @@ export default function ConfiguracionPage() {
               </CardContent>
             </Card>
 
-            {/* Preferences */}
-            <Card style={{ backgroundColor: theme.card_color }}>
+            {/* Preferencias */}
+            <Card className="border-border bg-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2" style={{ color: theme.text_color }}>
-                  <Globe className="h-5 w-5" />
+                  <Globe className="h-5 w-5 text-primary" />
                   Preferencias
                 </CardTitle>
-                <CardDescription>Personaliza tu experiencia</CardDescription>
+                <CardDescription className="text-muted-foreground">Idioma y moneda</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="currency" style={{ color: theme.text_color }}>Moneda predeterminada</Label>
-                  <select 
-                    id="currency"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
-                    defaultValue="COP"
-                  >
+                  <Label className="text-foreground">Moneda</Label>
+                  <select className="w-full h-10 px-3 rounded-md border border-border bg-muted/50 text-foreground text-sm focus:ring-2 focus:ring-primary outline-none">
                     <option value="COP">Peso Colombiano (COP)</option>
-                    <option value="USD">Dólar Estadounidense (USD)</option>
-                    <option value="EUR">Euro (EUR)</option>
+                    <option value="USD">Dólar (USD)</option>
                   </select>
                 </div>
-                {/* ... Resto de los selects de idioma y timezone ... */}
+                <div className="grid gap-2">
+                  <Label className="text-foreground">Zona horaria</Label>
+                  <select className="w-full h-10 px-3 rounded-md border border-border bg-muted/50 text-foreground text-sm focus:ring-2 focus:ring-primary outline-none">
+                    <option value="bogota">Bogotá (GMT-5)</option>
+                  </select>
+                </div>
               </CardContent>
             </Card>
           </div>
