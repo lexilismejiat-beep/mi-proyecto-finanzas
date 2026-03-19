@@ -19,12 +19,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # Hemos eliminado totalmente la configuración de cache para evitar el error
 
       - name: Install dependencies
-        run: npm install --no-package-lock
+        # Agregamos --legacy-peer-deps para evitar conflictos de versiones con React 19
+        run: npm install --no-package-lock --legacy-peer-deps
 
       - name: Build Next.js
+        # Aquí inyectamos tus llaves de Supabase desde los Secrets de GitHub
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Initialize Capacitor
