@@ -28,7 +28,6 @@ const navItems: NavItem[] = [
   { icon: ArrowUpDown, label: "Transacciones", href: "/dashboard/transacciones" },
   { icon: PieChart, label: "Categorías", href: "/dashboard/categorias" },
   { icon: TrendingUp, label: "Reportes", href: "/dashboard/reportes" },
-  { icon: CreditCard, label: "Cuentas", href: "/dashboard/cuentas" },
   { icon: Bell, label: "Recordatorios", href: "/dashboard/recordatorios" },
   { icon: Settings, label: "Configuración", href: "/dashboard/configuracion" },
 ]
