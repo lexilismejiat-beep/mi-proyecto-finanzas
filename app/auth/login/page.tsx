@@ -3,29 +3,48 @@
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isNative, setIsNative] = useState(false)
   const supabase = createClient()
+
+  useEffect(() => {
+    // Detectamos si estamos en un entorno Capacitor (móvil)
+    const isMobileApp = window.location.origin.includes('localhost') && 
+                       !window.location.port; // Generalmente las APK no usan puertos como el 3000
+    
+    // Una forma más segura es checkear el userAgent o si existe Capacitor
+    const checkNative = (window as any).Capacitor?.isNative || isMobileApp;
+    setIsNative(checkNative);
+  }, [])
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
     try {
+      // 1. Definimos la URL de retorno
+      // Si es Web: usamos el origen actual (ej: https://tu-app.vercel.app)
+      // Si es Móvil: usamos el esquema de la APK que configuramos en Capacitor
+      const redirectURL = isNative 
+        ? "com.misfinanzas.app://dashboard" 
+        : `${window.location.origin}/dashboard`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectURL,
+          skipBrowserRedirect: false,
         },
       })
+
       if (error) {
         console.error("Error logging in with Google:", error.message)
       }
     } catch (error) {
       console.error("Unexpected error:", error)
     } finally {
-      // Nota: A menudo el redireccionamiento ocurre antes de llegar aquí
       setIsLoading(false)
     }
   }
@@ -65,17 +84,16 @@ export default function LoginPage() {
 
         <CardContent className="space-y-6 pt-6">
           <div className="space-y-4">
-            {/* BOTÓN DE GOOGLE OPTIMIZADO */}
             <Button
               onClick={handleGoogleLogin}
               disabled={isLoading}
               variant="outline"
               className={cn(
                 "w-full h-12 text-base font-semibold transition-all duration-200",
-                "bg-white text-gray-900 border-gray-300 shadow-sm", // Fondo blanco puro
-                "hover:bg-gray-50 hover:border-gray-400 hover:shadow-md", // Hover sutil
-                "active:scale-[0.98]", // Efecto de clic
-                isLoading && "opacity-80 cursor-not-allowed bg-white" // Mantener blanco aunque cargue
+                "bg-white text-gray-900 border-gray-300 shadow-sm", 
+                "hover:bg-gray-50 hover:border-gray-400 hover:shadow-md",
+                "active:scale-[0.98]",
+                isLoading && "opacity-80 cursor-not-allowed"
               )}
             >
               {isLoading ? (
