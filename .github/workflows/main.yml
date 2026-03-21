@@ -21,11 +21,9 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        # Agregamos --legacy-peer-deps para evitar conflictos de versiones con React 19
         run: npm install --no-package-lock --legacy-peer-deps
 
       - name: Build Next.js
-        # Aquí inyectamos tus llaves de Supabase desde los Secrets de GitHub
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -38,6 +36,20 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Force Deep Links in AndroidManifest
+        run: |
+          # Este script busca la etiqueta <activity> principal e inyecta el filtro de retorno
+          # Esto es lo que hace que el link com.misfinanzas.app://app abra la aplicación
+          FILE="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<activity/a \
+                <intent-filter>\
+                    <action android:name="android.intent.action.VIEW" />\
+                    <category android:name="android.intent.category.DEFAULT" />\
+                    <category android:name="android.intent.category.BROWSABLE" />\
+                    <data android:scheme="com.misfinanzas.app" android:host="app" />\
+                </intent-filter>' $FILE
+          echo "AndroidManifest actualizado con el esquema com.misfinanzas.app://app"
 
       - name: Build with Gradle
         run: |
