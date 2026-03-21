@@ -37,12 +37,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Configure Deep Links
+      - name: Configure Deep Links (Single Line Fix)
         run: |
-          # Usamos un comando de búsqueda y reemplazo más sencillo para no romper el XML
           FILE="android/app/src/main/AndroidManifest.xml"
-          DEEP_LINK='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter>'
-          sed -i "s|</activity>|$DEEP_LINK</activity>|g" $FILE
+          # Insertamos el intent-filter justo antes de cerrar la activity en una sola línea para evitar errores de parseo
+          sed -i 's|</activity>|<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter></activity>|g' $FILE
 
       - name: Build with Gradle
         run: |
