@@ -12,24 +12,28 @@ export default function LoginPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Detectamos si estamos en un entorno Capacitor (móvil)
-    const isMobileApp = window.location.origin.includes('localhost') && 
-                       !window.location.port; // Generalmente las APK no usan puertos como el 3000
+    // Detectar si estamos en Capacitor de forma más robusta
+    const checkNative = () => {
+      const isCapacitor = !!(window as any).Capacitor?.isNative;
+      const isAndroidApp = window.location.href.includes('http://localhost') && !window.location.port;
+      return isCapacitor || isAndroidApp;
+    };
     
-    // Una forma más segura es checkear el userAgent o si existe Capacitor
-    const checkNative = (window as any).Capacitor?.isNative || isMobileApp;
-    setIsNative(checkNative);
+    setIsNative(checkNative());
   }, [])
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
     try {
-      // 1. Definimos la URL de retorno
-      // Si es Web: usamos el origen actual (ej: https://tu-app.vercel.app)
-      // Si es Móvil: usamos el esquema de la APK que configuramos en Capacitor
+      /* 
+         IMPORTANTE: Usamos 'com.misfinanzas.app://app' para que coincida 
+         exactamente con el Intent Filter que pusimos en el main.yml
+      */
       const redirectURL = isNative 
-        ? "com.misfinanzas.app://dashboard" 
+        ? "com.misfinanzas.app://app" 
         : `${window.location.origin}/dashboard`;
+
+      console.log("Redirigiendo a:", redirectURL);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -45,7 +49,7 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Unexpected error:", error)
     } finally {
-      setIsLoading(false)
+      // No seteamos isLoading(false) aquí porque el navegador nos sacará de la app
     }
   }
 
