@@ -2,8 +2,13 @@
   "appId": "com.misfinanzas.app",
   "appName": "Mis Finanzas",
   "webDir": "out",
-  "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "com.misfinanzas.app"
+    "androidScheme": "com.misfinanzas.app",
+    "hostname": "app"
+  },
+  "plugins": {
+    "DeepLinks": {
+      "schemes": ["com.misfinanzas.app"]
+    }
   }
 }
