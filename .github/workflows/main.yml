@@ -37,19 +37,12 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Force Deep Links in AndroidManifest
+      - name: Configure Deep Links
         run: |
-          # Este script busca la etiqueta <activity> principal e inyecta el filtro de retorno
-          # Esto es lo que hace que el link com.misfinanzas.app://app abra la aplicación
+          # Usamos un comando de búsqueda y reemplazo más sencillo para no romper el XML
           FILE="android/app/src/main/AndroidManifest.xml"
-          sed -i '/<activity/a \
-                <intent-filter>\
-                    <action android:name="android.intent.action.VIEW" />\
-                    <category android:name="android.intent.category.DEFAULT" />\
-                    <category android:name="android.intent.category.BROWSABLE" />\
-                    <data android:scheme="com.misfinanzas.app" android:host="app" />\
-                </intent-filter>' $FILE
-          echo "AndroidManifest actualizado con el esquema com.misfinanzas.app://app"
+          DEEP_LINK='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter>'
+          sed -i "s|</activity>|$DEEP_LINK</activity>|g" $FILE
 
       - name: Build with Gradle
         run: |
