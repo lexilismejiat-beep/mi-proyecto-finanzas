@@ -14,7 +14,7 @@
 
     "@supabase/auth-helpers-nextjs": "latest",
 
-    "@supabase/supabase-js": "latest"
+    "@supabase/supabase-js": "latest",
 
     "@capacitor/core": "^6.0.0",
 
