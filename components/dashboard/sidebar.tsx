@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -40,25 +41,62 @@ interface SidebarProps {
   sidebarColor?: string
 }
 
+// Función auxiliar para determinar si un color es claro u oscuro
+function isColorLight(color: string): boolean {
+  if (!color) return false
+  const hex = color.replace("#", "")
+  const r = parseInt(hex.substr(0, 2), 16)
+  const g = parseInt(hex.substr(2, 2), 16)
+  const b = parseInt(hex.substr(4, 2), 16)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000
+  return brightness > 128
+}
+
 export function Sidebar({ 
   collapsed: controlledCollapsed, 
   onCollapsedChange,
   mobileOpen = false,
   onMobileOpenChange,
-  sidebarColor = "#1f2937"
+  sidebarColor: propColor = "#1f2937"
 }: SidebarProps) {
   const pathname = usePathname()
+  const supabase = createClientComponentClient()
+  
+  // Estados locales
   const [internalCollapsed, setInternalCollapsed] = useState(false)
+  const [dbSidebarColor, setDbSidebarColor] = useState(propColor)
+  
   const collapsed = controlledCollapsed ?? internalCollapsed
   const setCollapsed = onCollapsedChange ?? setInternalCollapsed
 
-  // Calculate if text should be light or dark based on background
-  const isLightBackground = isColorLight(sidebarColor)
-  const textColor = isLightBackground ? "#1f2937" : "#ffffff"
-  const textColorMuted = isLightBackground ? "rgba(31, 41, 55, 0.7)" : "rgba(255, 255, 255, 0.7)"
-  const hoverBg = isLightBackground ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.1)"
-  const activeBg = isLightBackground ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.15)"
-  const borderColor = isLightBackground ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)"
+  // 1. Efecto para cargar el color desde Supabase al montar el componente
+  useEffect(() => {
+    const fetchSidebarSettings = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('sidebar_color')
+          .eq('id', session.user.id)
+          .single()
+        
+        if (data?.sidebar_color) {
+          setDbSidebarColor(data.sidebar_color)
+        }
+      }
+    }
+    fetchSidebarSettings()
+  }, [supabase])
+
+  // 2. Lógica de colores dinámica
+  const activeColor = dbSidebarColor
+  const isLight = isColorLight(activeColor)
+  
+  const textColor = isLight ? "#111827" : "#ffffff"
+  const textColorMuted = isLight ? "rgba(17, 24, 39, 0.7)" : "rgba(255, 255, 255, 0.7)"
+  const hoverBg = isLight ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.1)"
+  const activeBg = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.15)"
+  const borderColor = isLight ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)"
 
   return (
     <>
@@ -78,7 +116,7 @@ export function Sidebar({
           mobileOpen && "flex w-64"
         )}
         style={{ 
-          backgroundColor: sidebarColor,
+          backgroundColor: activeColor,
           borderRight: `1px solid ${borderColor}`
         }}
       >
@@ -106,9 +144,7 @@ export function Sidebar({
                 key={item.label}
                 href={item.href}
                 onClick={() => onMobileOpenChange?.(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
-                )}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
                 style={{
                   backgroundColor: isActive ? activeBg : "transparent",
                   color: isActive ? textColor : textColorMuted,
@@ -164,14 +200,4 @@ export function Sidebar({
       </aside>
     </>
   )
-}
-
-// Helper function to determine if a color is light or dark
-function isColorLight(color: string): boolean {
-  const hex = color.replace("#", "")
-  const r = parseInt(hex.substr(0, 2), 16)
-  const g = parseInt(hex.substr(2, 2), 16)
-  const b = parseInt(hex.substr(4, 2), 16)
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000
-  return brightness > 128
 }
