@@ -8,9 +8,10 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Palette, Type, ImageIcon, RotateCcw, Upload } from "lucide-react"
+import { Palette, Type, ImageIcon, RotateCcw, Upload, Save, Loader2 } from "lucide-react"
 import { useState, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 const FONT_OPTIONS = [
   { value: "Inter", label: "Inter" },
@@ -108,20 +109,53 @@ const PRESET_THEMES = [
 export function ThemeCustomizer() {
   const { theme, updateTheme } = useThemeSettings()
   const [isUploading, setIsUploading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
+
+  // --- FUNCIÓN PARA GUARDAR EN LA BASE DE DATOS ---
+  const handleSaveToDatabase = async () => {
+    setIsSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("No hay sesión activa")
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          primary_color: theme.primary_color,
+          secondary_color: theme.secondary_color,
+          accent_color: theme.accent_color,
+          background_color: theme.background_color,
+          text_color: theme.text_color,
+          sidebar_color: theme.sidebar_color,
+          card_color: theme.card_color,
+          font_family: theme.font_family,
+          font_size: theme.font_size,
+          background_image: theme.background_image_url, // Usando la URL de la tabla
+          background_opacity: theme.background_opacity
+        })
+        .eq('id', user.id)
+
+      if (error) throw error
+      toast.success("¡Configuración guardada para siempre!")
+    } catch (error: any) {
+      console.error("Error al guardar:", error)
+      toast.error("Error al guardar: " + error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const handleColorChange = (key: string, value: string) => {
     updateTheme({ [key]: value })
   }
 
   const handleFontChange = (value: string) => {
-    // Load Google Font dynamically
     const link = document.createElement("link")
     link.href = `https://fonts.googleapis.com/css2?family=${value.replace(/ /g, "+")}:wght@300;400;500;600;700&display=swap`
     link.rel = "stylesheet"
     document.head.appendChild(link)
-    
     updateTheme({ font_family: value })
   }
 
@@ -150,31 +184,17 @@ export function ThemeCustomizer() {
         .from("user-assets")
         .upload(filePath, file)
 
-      if (uploadError) {
-        // If bucket doesn't exist, use a data URL instead
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string
-          updateTheme({ background_image_url: dataUrl })
-        }
-        reader.readAsDataURL(file)
-        return
-      }
+      if (uploadError) throw uploadError
 
       const { data: { publicUrl } } = supabase.storage
         .from("user-assets")
         .getPublicUrl(filePath)
 
       updateTheme({ background_image_url: publicUrl })
+      toast.success("Imagen de fondo subida")
     } catch (error) {
-      console.error("Error uploading image:", error)
-      // Fallback to data URL
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string
-        updateTheme({ background_image_url: dataUrl })
-      }
-      reader.readAsDataURL(file)
+      console.error("Error subiendo imagen:", error)
+      toast.error("Error al subir imagen al storage")
     } finally {
       setIsUploading(false)
     }
@@ -186,6 +206,7 @@ export function ThemeCustomizer() {
 
   const handleResetTheme = () => {
     updateTheme(defaultTheme)
+    toast.info("Valores restablecidos (debes guardar para confirmar)")
   }
 
   const applyPreset = (preset: typeof PRESET_THEMES[0]) => {
@@ -199,207 +220,135 @@ export function ThemeCustomizer() {
           <Palette className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto flex flex-col">
         <SheetHeader>
           <SheetTitle>Personalizar apariencia</SheetTitle>
           <SheetDescription>
-            Personaliza los colores, fuentes e imagen de fondo de tu página
+            Personaliza colores, fuentes e imagen de fondo. Recuerda guardar al finalizar.
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs defaultValue="colors" className="mt-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="colors" className="flex items-center gap-2">
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">Colores</span>
-            </TabsTrigger>
-            <TabsTrigger value="typography" className="flex items-center gap-2">
-              <Type className="h-4 w-4" />
-              <span className="hidden sm:inline">Fuentes</span>
-            </TabsTrigger>
-            <TabsTrigger value="background" className="flex items-center gap-2">
-              <ImageIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">Fondo</span>
-            </TabsTrigger>
-          </TabsList>
+        <div className="flex-1">
+          <Tabs defaultValue="colors" className="mt-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="colors" className="flex items-center gap-2">
+                <Palette className="h-4 w-4" />
+                <span>Colores</span>
+              </TabsTrigger>
+              <TabsTrigger value="typography" className="flex items-center gap-2">
+                <Type className="h-4 w-4" />
+                <span>Fuentes</span>
+              </TabsTrigger>
+              <TabsTrigger value="background" className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                <span>Fondo</span>
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="colors" className="space-y-6 mt-6">
-            {/* Preset Themes */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Temas prediseñados</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {PRESET_THEMES.map((preset) => (
-                  <Button
-                    key={preset.name}
-                    variant="outline"
-                    className="h-auto py-3 flex flex-col items-start gap-2"
-                    onClick={() => applyPreset(preset)}
-                  >
-                    <span className="text-xs font-medium">{preset.name}</span>
-                    <div className="flex gap-1">
-                      {Object.values(preset.colors).slice(0, 4).map((color, i) => (
-                        <div
-                          key={i}
-                          className="w-4 h-4 rounded-full border"
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom Colors */}
-            <div className="space-y-4">
-              <Label className="text-sm font-medium">Colores personalizados</Label>
-              
-              <div className="grid gap-4">
-                <ColorPicker
-                  label="Color primario"
-                  value={theme.primary_color}
-                  onChange={(v) => handleColorChange("primary_color", v)}
-                />
-                <ColorPicker
-                  label="Color secundario"
-                  value={theme.secondary_color}
-                  onChange={(v) => handleColorChange("secondary_color", v)}
-                />
-                <ColorPicker
-                  label="Color de acento"
-                  value={theme.accent_color}
-                  onChange={(v) => handleColorChange("accent_color", v)}
-                />
-                <ColorPicker
-                  label="Color de fondo"
-                  value={theme.background_color}
-                  onChange={(v) => handleColorChange("background_color", v)}
-                />
-                <ColorPicker
-                  label="Color de texto"
-                  value={theme.text_color}
-                  onChange={(v) => handleColorChange("text_color", v)}
-                />
-                <ColorPicker
-                  label="Color del sidebar"
-                  value={theme.sidebar_color}
-                  onChange={(v) => handleColorChange("sidebar_color", v)}
-                />
-                <ColorPicker
-                  label="Color de tarjetas"
-                  value={theme.card_color}
-                  onChange={(v) => handleColorChange("card_color", v)}
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="typography" className="space-y-6 mt-6">
-            <div className="space-y-4">
+            <TabsContent value="colors" className="space-y-6 mt-6">
               <div className="space-y-3">
-                <Label className="text-sm font-medium">Familia de fuente</Label>
-                <Select value={theme.font_family} onValueChange={handleFontChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FONT_OPTIONS.map((font) => (
-                      <SelectItem key={font.value} value={font.value}>
-                        <span style={{ fontFamily: font.value }}>{font.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <Label className="text-sm font-medium">Tamaño de fuente</Label>
-                  <span className="text-sm text-muted-foreground">{theme.font_size}px</span>
+                <Label className="text-sm font-medium">Temas prediseñados</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {PRESET_THEMES.map((preset) => (
+                    <Button
+                      key={preset.name}
+                      variant="outline"
+                      className="h-auto py-3 flex flex-col items-start gap-2"
+                      onClick={() => applyPreset(preset)}
+                    >
+                      <span className="text-xs font-medium">{preset.name}</span>
+                      <div className="flex gap-1">
+                        {Object.values(preset.colors).slice(0, 4).map((color, i) => (
+                          <div key={i} className="w-4 h-4 rounded-full border" style={{ backgroundColor: color }} />
+                        ))}
+                      </div>
+                    </Button>
+                  ))}
                 </div>
-                <Slider
-                  value={[parseInt(theme.font_size)]}
-                  onValueChange={handleFontSizeChange}
-                  min={12}
-                  max={24}
-                  step={1}
-                />
               </div>
 
-              <div className="p-4 rounded-lg border bg-muted/50">
-                <p className="text-sm" style={{ fontFamily: theme.font_family, fontSize: `${theme.font_size}px` }}>
-                  Vista previa del texto con la fuente y tamaño seleccionados. 
-                  Así se verá el contenido en tu aplicación.
-                </p>
+              <div className="space-y-4">
+                <Label className="text-sm font-medium">Colores personalizados</Label>
+                <div className="grid gap-4">
+                  <ColorPicker label="Primario" value={theme.primary_color} onChange={(v) => handleColorChange("primary_color", v)} />
+                  <ColorPicker label="Secundario" value={theme.secondary_color} onChange={(v) => handleColorChange("secondary_color", v)} />
+                  <ColorPicker label="Acento" value={theme.accent_color} onChange={(v) => handleColorChange("accent_color", v)} />
+                  <ColorPicker label="Fondo" value={theme.background_color} onChange={(v) => handleColorChange("background_color", v)} />
+                  <ColorPicker label="Texto" value={theme.text_color} onChange={(v) => handleColorChange("text_color", v)} />
+                  <ColorPicker label="Sidebar" value={theme.sidebar_color} onChange={(v) => handleColorChange("sidebar_color", v)} />
+                  <ColorPicker label="Tarjetas" value={theme.card_color} onChange={(v) => handleColorChange("card_color", v)} />
+                </div>
               </div>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="background" className="space-y-6 mt-6">
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Imagen de fondo</Label>
+            <TabsContent value="typography" className="space-y-6 mt-6">
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <Label>Familia de fuente</Label>
+                  <Select value={theme.font_family} onValueChange={handleFontChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FONT_OPTIONS.map((font) => (
+                        <SelectItem key={font.value} value={font.value}>
+                          <span style={{ fontFamily: font.value }}>{font.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <Label>Tamaño de fuente</Label>
+                    <span className="text-sm text-muted-foreground">{theme.font_size}px</span>
+                  </div>
+                  <Slider value={[parseInt(theme.font_size)]} onValueChange={handleFontSizeChange} min={12} max={24} step={1} />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="background" className="space-y-6 mt-6">
+              <div className="space-y-4">
+                <Label>Imagen de fondo</Label>
                 <div className="flex gap-2">
-                  <Input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                  >
+                  <Input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  <Button variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                     <Upload className="h-4 w-4 mr-2" />
                     {isUploading ? "Subiendo..." : "Subir imagen"}
                   </Button>
                   {theme.background_image_url && (
-                    <Button variant="destructive" onClick={handleRemoveBackground}>
-                      Quitar
-                    </Button>
+                    <Button variant="destructive" onClick={handleRemoveBackground}>Quitar</Button>
                   )}
                 </div>
-              </div>
 
-              {theme.background_image_url && (
-                <>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <Label className="text-sm font-medium">Opacidad del fondo</Label>
-                      <span className="text-sm text-muted-foreground">{theme.background_opacity}%</span>
+                {theme.background_image_url && (
+                  <>
+                    <div className="space-y-3">
+                      <Label>Opacidad del fondo ({theme.background_opacity}%)</Label>
+                      <Slider value={[theme.background_opacity]} onValueChange={handleBackgroundOpacityChange} min={10} max={100} step={5} />
                     </div>
-                    <Slider
-                      value={[theme.background_opacity]}
-                      onValueChange={handleBackgroundOpacityChange}
-                      min={10}
-                      max={100}
-                      step={5}
-                    />
-                  </div>
-
-                  <div className="relative h-32 rounded-lg overflow-hidden border">
-                    <img
-                      src={theme.background_image_url}
-                      alt="Background preview"
-                      className="w-full h-full object-cover"
-                      style={{ opacity: theme.background_opacity / 100 }}
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="p-4 rounded-lg border bg-muted/50 text-sm text-muted-foreground">
-                <p>Sube una imagen para usarla como fondo de tu aplicación. Puedes ajustar la opacidad para que el contenido sea más legible.</p>
+                    <div className="relative h-32 rounded-lg overflow-hidden border">
+                      <img src={theme.background_image_url} alt="Preview" className="w-full h-full object-cover" style={{ opacity: theme.background_opacity / 100 }} />
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        </div>
 
-        <div className="mt-6 pt-6 border-t">
-          <Button variant="outline" className="w-full" onClick={handleResetTheme}>
+        {/* --- PIE DE PÁGINA CON BOTONES DE ACCIÓN --- */}
+        <div className="mt-auto pt-6 border-t space-y-3 pb-4">
+          <Button 
+            className="w-full gap-2 shadow-md" 
+            onClick={handleSaveToDatabase} 
+            disabled={isSaving || isUploading}
+            style={{ backgroundColor: theme.primary_color, color: theme.text_color }}
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {isSaving ? "Guardando..." : "Guardar cambios permanentes"}
+          </Button>
+
+          <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleResetTheme}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Restablecer valores por defecto
           </Button>
@@ -409,32 +358,13 @@ export function ThemeCustomizer() {
   )
 }
 
-function ColorPicker({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}) {
+function ColorPicker({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <Label className="text-sm">{label}</Label>
       <div className="flex items-center gap-2">
-        <Input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-10 h-10 p-1 cursor-pointer"
-        />
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-24 uppercase"
-          maxLength={7}
-        />
+        <Input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="w-10 h-10 p-1 cursor-pointer" />
+        <Input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="w-24 uppercase text-xs" maxLength={7} />
       </div>
     </div>
   )
