@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
+    "@supabase/auth-helpers-nextjs": "latest",
+    "@supabase/supabase-js": "latest"
     "@capacitor/core": "^6.0.0",
     "@capacitor/cli": "^6.0.0",
     "@hookform/resolvers": "^3.9.1",
