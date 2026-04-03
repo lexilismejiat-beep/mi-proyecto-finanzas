@@ -1,4 +1,4 @@
-
+"use client"
 
 import { useThemeSettings, defaultTheme } from "@/lib/theme-context"
 import { Button } from "@/components/ui/button"
