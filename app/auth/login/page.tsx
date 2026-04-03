@@ -12,7 +12,6 @@ export default function LoginPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Detectar si estamos en Capacitor de forma más robusta
     const checkNative = () => {
       const isCapacitor = !!(window as any).Capacitor?.isNative;
       const isAndroidApp = window.location.href.includes('http://localhost') && !window.location.port;
@@ -29,8 +28,6 @@ export default function LoginPage() {
         ? "com.misfinanzas.app://app" 
         : `${window.location.origin}/dashboard`;
 
-      console.log("Redirigiendo a:", redirectURL);
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -41,7 +38,7 @@ export default function LoginPage() {
 
       if (error) {
         console.error("Error logging in with Google:", error.message)
-        setIsLoading(false) // Solo si hay error volvemos a habilitar el botón
+        setIsLoading(false)
       }
     } catch (error) {
       console.error("Unexpected error:", error)
@@ -88,19 +85,24 @@ export default function LoginPage() {
               onClick={handleGoogleLogin}
               disabled={isLoading}
               variant="outline"
-              // CLASES MODIFICADAS: Forzamos bg-white y text-gray-900 sin importar el modo oscuro
+              // Forzamos clases de fondo blanco y texto oscuro
               className={cn(
                 "w-full h-12 text-base font-semibold transition-all duration-200",
-                "bg-white text-gray-900 border-gray-300 shadow-sm", 
-                "hover:bg-gray-50 hover:border-gray-400 hover:shadow-md",
-                "active:scale-[0.98]",
+                "border-gray-300 shadow-sm", 
+                "hover:shadow-md active:scale-[0.98]",
                 isLoading && "opacity-80 cursor-not-allowed"
               )}
+              // ESTO ES LO QUE SOLUCIONA EL COLOR NEGRO:
+              style={{ 
+                backgroundColor: 'white', 
+                color: '#1a1a1a', // Un gris muy oscuro casi negro
+                borderColor: '#d1d5db' 
+              }}
             >
               {isLoading ? (
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-gray-600">Conectando...</span>
+                  <span style={{ color: '#666' }}>Conectando...</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
@@ -122,7 +124,7 @@ export default function LoginPage() {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span>Continuar con Google</span>
+                  <span className="font-bold">Continuar con Google</span>
                 </div>
               )}
             </Button>
