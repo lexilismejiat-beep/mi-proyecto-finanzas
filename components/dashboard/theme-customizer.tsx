@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Palette, Type, ImageIcon, RotateCcw, Upload, Save, Loader2 } from "lucide-react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react" // Se agregó useEffect
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
@@ -113,6 +113,44 @@ export function ThemeCustomizer() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
+  // --- NUEVO: EFECTO PARA CARGAR EL TEMA DESDE SUPABASE AL INICIAR ---
+  useEffect(() => {
+    const loadSavedTheme = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          updateTheme({
+            primary_color: data.primary_color || theme.primary_color,
+            secondary_color: data.secondary_color || theme.secondary_color,
+            accent_color: data.accent_color || theme.accent_color,
+            background_color: data.background_color || theme.background_color,
+            text_color: data.text_color || theme.text_color,
+            sidebar_color: data.sidebar_color || theme.sidebar_color,
+            card_color: data.card_color || theme.card_color,
+            font_family: data.font_family || theme.font_family,
+            font_size: data.font_size || theme.font_size,
+            background_image_url: data.background_image || theme.background_image_url,
+            background_opacity: data.background_opacity || theme.background_opacity
+          });
+        }
+      } catch (err) {
+        console.error("Error al cargar tema inicial:", err);
+      }
+    };
+
+    loadSavedTheme();
+  }, []);
+
   // --- FUNCIÓN PARA GUARDAR EN LA BASE DE DATOS ---
   const handleSaveToDatabase = async () => {
     setIsSaving(true)
@@ -132,7 +170,7 @@ export function ThemeCustomizer() {
           card_color: theme.card_color,
           font_family: theme.font_family,
           font_size: theme.font_size,
-          background_image: theme.background_image_url, // Usando la URL de la tabla
+          background_image: theme.background_image_url, 
           background_opacity: theme.background_opacity
         })
         .eq('id', user.id)
@@ -336,7 +374,6 @@ export function ThemeCustomizer() {
           </Tabs>
         </div>
 
-        {/* --- PIE DE PÁGINA CON BOTONES DE ACCIÓN --- */}
         <div className="mt-auto pt-6 border-t space-y-3 pb-4">
           <Button 
             className="w-full gap-2 shadow-md" 
