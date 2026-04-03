@@ -164,33 +164,36 @@ export default function RecordatoriosPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  // --- FUNCIÓN PARA PROBAR EL BOT CON BOTPRESS ---
- const handleTestBot = async () => {
-  // En lugar de Botpress, llamamos directamente a Telegram
-  // Necesitarías el BOT_TOKEN de tu bot y el chat_id del usuario
-  const BOT_TOKEN = "8662913172:AAHpJ0i59-VjjlzLi8_tpdFlIonhNTdropQ";
-  const CHAT_ID = profile.telegram_id; // Suponiendo que lo tienes
-
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-  
-  await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: CHAT_ID,
-      text: "Hola, ya todo está listo, puedes empezar a agendar tus recordatorios."
-    })
-  });
-};
+  // --- FUNCIÓN PARA PROBAR EL BOT DIRECTO CON TELEGRAM ---
+  const handleTestBot = async () => {
+    // IMPORTANTE: Aquí debes poner TU ID de chat de Telegram que obtuviste en el paso previo
+    // Si aún no lo tienes, el test fallará.
+    const MI_CHAT_ID = "TU_NUMERO_DE_ID_AQUI" 
+    const TELEGRAM_TOKEN = "8662913172:AAHpJ0i59-VjjlzLi8_tpdFlIonhNTdropQ"
+    
+    setIsTestingBot(true)
+    try {
+      const message = `🔔 ¡Hola ${profile?.full_name || 'Usuario'}! Tu bot de Finanzas Personales está conectado correctamente. Recibirás tus alertas aquí.`
+      
+      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: MI_CHAT_ID,
+          text: message,
+          parse_mode: "Markdown"
+        })
+      })
 
       if (response.ok) {
-        toast.success("¡Mensaje de prueba enviado!")
+        toast.success("¡Mensaje enviado a tu Telegram!")
       } else {
-        toast.error("El bot recibió la señal pero hubo un problema.")
+        const errorData = await response.json()
+        toast.error("Telegram rechazó el mensaje: " + errorData.description)
       }
     } catch (error) {
       console.error(error)
-      toast.error("Error de conexión con el bot.")
+      toast.error("Error de red al conectar con Telegram.")
     } finally {
       setIsTestingBot(false)
     }
@@ -203,7 +206,7 @@ export default function RecordatoriosPage() {
   }
 
   const handleEliminar = async (id: number) => {
-    if (!confirm("¿Eliminar este recordatorio? El bot dejará de avisarte.")) return
+    if (!confirm("¿Eliminar este recordatorio?")) return
     const { error } = await supabase.from("recordatorios").delete().eq('id', id)
     if (error) toast.error("Error al borrar")
     else { toast.success("Recordatorio eliminado"); fetchData(); }
@@ -239,26 +242,24 @@ export default function RecordatoriosPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
-              <p className="text-gray-400 text-sm">Gestiona tus alertas automáticas del bot.</p>
+              <p className="text-gray-400 text-sm">Gestiona tus alertas directas de Telegram.</p>
             </div>
             
             <div className="flex items-center gap-2">
-              {/* BOTÓN DE TEST BOT */}
               <Button 
                 variant="outline" 
                 onClick={handleTestBot}
                 disabled={isTestingBot || loading}
-                className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-colors gap-2"
+                className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 gap-2"
               >
                 {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                {isTestingBot ? "Enviando..." : "Probar Bot"}
+                {isTestingBot ? "Probando..." : "Probar Telegram"}
               </Button>
 
               <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
             </div>
           </div>
 
-          {/* Banner de Resumen */}
           <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
             <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4">
@@ -283,7 +284,6 @@ export default function RecordatoriosPage() {
             </CardContent>
           </Card>
 
-          {/* Listado de Recordatorios */}
           <div className="grid gap-4">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Clock size={14} /> Cronograma de pagos
@@ -291,7 +291,7 @@ export default function RecordatoriosPage() {
             {loading ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div> : 
               pending.length === 0 ? (
                 <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
-                    No tienes pagos pendientes. ¡Buen trabajo!
+                    No tienes pagos pendientes.
                 </div>
               ) : (
                 pending.map(r => {
@@ -318,16 +318,14 @@ export default function RecordatoriosPage() {
                                 <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
                                     <div className="text-right">
                                         <p className="font-black text-xl text-white">{formatCurrency(r.monto)}</p>
-                                        <p className="text-[10px] text-orange-500 font-medium">Bot avisa {r.recordar_dias_antes} días antes</p>
+                                        <p className="text-[10px] text-orange-500 font-medium">Aviso {r.recordar_dias_antes} días antes</p>
                                     </div>
 
                                     <div className="flex gap-1">
                                         <Button onClick={() => handleMarcarComoPagado(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-emerald-500 hover:bg-emerald-500/10">
                                             <CheckCircle2 size={18}/>
                                         </Button>
-                                        
                                         <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} editData={r} />
-
                                         <Button onClick={() => handleEliminar(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10">
                                             <Trash2 size={18}/>
                                         </Button>
