@@ -165,23 +165,23 @@ export default function RecordatoriosPage() {
   useEffect(() => { fetchData() }, [])
 
   // --- FUNCIÓN PARA PROBAR EL BOT CON BOTPRESS ---
-  const handleTestBot = async () => {
-    if (!profile?.cedula) return toast.error("No se encontró tu identificación para enviar el test.")
-    
-    setIsTestingBot(true)
-    try {
-      // REEMPLAZA ESTA URL POR TU WEBHOOK DE BOTPRESS
-      const BOTPRESS_WEBHOOK_URL = "https://webhook.botpress.cloud/25e6b41d-116d-4bb1-8eec-3ae2b2056852"
-      
-      const response = await fetch(BOTPRESS_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: profile.cedula,
-          type: "test_notification",
-          message: "Hola, ya todo está listo, puedes empezar a agendar tus recordatorios."
-        })
-      })
+ const handleTestBot = async () => {
+  // En lugar de Botpress, llamamos directamente a Telegram
+  // Necesitarías el BOT_TOKEN de tu bot y el chat_id del usuario
+  const BOT_TOKEN = "8662913172:AAHpJ0i59-VjjlzLi8_tpdFlIonhNTdropQ";
+  const CHAT_ID = profile.telegram_id; // Suponiendo que lo tienes
+
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+  
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: CHAT_ID,
+      text: "Hola, ya todo está listo, puedes empezar a agendar tus recordatorios."
+    })
+  });
+};
 
       if (response.ok) {
         toast.success("¡Mensaje de prueba enviado!")
