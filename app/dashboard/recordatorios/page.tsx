@@ -11,13 +11,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Pencil, Trash2, Bell, Calendar, Clock, AlertCircle, CheckCircle2, Loader2, BellRing } from "lucide-react"
+import { 
+  Plus, Pencil, Trash2, Bell, Calendar, Clock, 
+  AlertCircle, CheckCircle2, Loader2, BellRing, Send 
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, differenceInDays, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
 
-// --- COMPONENTE DE FORMULARIO (SIRVE PARA CREAR Y EDITAR) ---
+// --- COMPONENTE DE FORMULARIO ---
 function ModalRecordatorio({ 
   userCedula, 
   onRefresh, 
@@ -137,6 +140,7 @@ export default function RecordatoriosPage() {
   const [reminders, setReminders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
+  const [isTestingBot, setIsTestingBot] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -159,6 +163,38 @@ export default function RecordatoriosPage() {
   }
 
   useEffect(() => { fetchData() }, [])
+
+  // --- FUNCIÓN PARA PROBAR EL BOT CON BOTPRESS ---
+  const handleTestBot = async () => {
+    if (!profile?.cedula) return toast.error("No se encontró tu identificación para enviar el test.")
+    
+    setIsTestingBot(true)
+    try {
+      // REEMPLAZA ESTA URL POR TU WEBHOOK DE BOTPRESS
+      const BOTPRESS_WEBHOOK_URL = "https://webhook.botpress.cloud/e8c0a034-6706-4372-ac3f-1c7ebf003793"
+      
+      const response = await fetch(BOTPRESS_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: profile.cedula,
+          type: "test_notification",
+          message: "Hola, ya todo está listo, puedes empezar a agendar tus recordatorios."
+        })
+      })
+
+      if (response.ok) {
+        toast.success("¡Mensaje de prueba enviado!")
+      } else {
+        toast.error("El bot recibió la señal pero hubo un problema.")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Error de conexión con el bot.")
+    } finally {
+      setIsTestingBot(false)
+    }
+  }
 
   const handleMarcarComoPagado = async (id: number) => {
     const { error } = await supabase.from("recordatorios").update({ estado: 'completado' }).eq('id', id)
@@ -200,12 +236,26 @@ export default function RecordatoriosPage() {
         <TopBar userName={profile?.full_name || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
         
         <main className="p-4 sm:p-8 space-y-6 max-w-5xl mx-auto">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
               <p className="text-gray-400 text-sm">Gestiona tus alertas automáticas del bot.</p>
             </div>
-            <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
+            
+            <div className="flex items-center gap-2">
+              {/* BOTÓN DE TEST BOT */}
+              <Button 
+                variant="outline" 
+                onClick={handleTestBot}
+                disabled={isTestingBot || loading}
+                className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-colors gap-2"
+              >
+                {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
+                {isTestingBot ? "Enviando..." : "Probar Bot"}
+              </Button>
+
+              <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
+            </div>
           </div>
 
           {/* Banner de Resumen */}
