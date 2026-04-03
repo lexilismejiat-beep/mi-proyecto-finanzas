@@ -25,10 +25,6 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setIsLoading(true)
     try {
-      /* 
-         IMPORTANTE: Usamos 'com.misfinanzas.app://app' para que coincida 
-         exactamente con el Intent Filter que pusimos en el main.yml
-      */
       const redirectURL = isNative 
         ? "com.misfinanzas.app://app" 
         : `${window.location.origin}/dashboard`;
@@ -45,11 +41,11 @@ export default function LoginPage() {
 
       if (error) {
         console.error("Error logging in with Google:", error.message)
+        setIsLoading(false) // Solo si hay error volvemos a habilitar el botón
       }
     } catch (error) {
       console.error("Unexpected error:", error)
-    } finally {
-      // No seteamos isLoading(false) aquí porque el navegador nos sacará de la app
+      setIsLoading(false)
     }
   }
 
@@ -92,6 +88,7 @@ export default function LoginPage() {
               onClick={handleGoogleLogin}
               disabled={isLoading}
               variant="outline"
+              // CLASES MODIFICADAS: Forzamos bg-white y text-gray-900 sin importar el modo oscuro
               className={cn(
                 "w-full h-12 text-base font-semibold transition-all duration-200",
                 "bg-white text-gray-900 border-gray-300 shadow-sm", 
