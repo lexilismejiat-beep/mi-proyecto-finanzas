@@ -171,7 +171,7 @@ export default function RecordatoriosPage() {
     setIsTestingBot(true)
     try {
       // REEMPLAZA ESTA URL POR TU WEBHOOK DE BOTPRESS
-      const BOTPRESS_WEBHOOK_URL = "https://webhook.botpress.cloud/e8c0a034-6706-4372-ac3f-1c7ebf003793"
+      const BOTPRESS_WEBHOOK_URL = "https://webhook.botpress.cloud/25e6b41d-116d-4bb1-8eec-3ae2b2056852"
       
       const response = await fetch(BOTPRESS_WEBHOOK_URL, {
         method: "POST",
