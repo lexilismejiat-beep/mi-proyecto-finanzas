@@ -3,21 +3,13 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Send, CheckCircle2, Loader2, User, Phone, MapPin, Calendar, ExternalLink } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { Send, CheckCircle2, Loader2, User, ExternalLink } from "lucide-react"
 
 interface UserProfile {
   id: string
   nombres: string
   apellidos: string
-  cedula: string
-  telefono: string
-  fecha_nacimiento: string | null
-  genero: string | null
-  direccion: string | null
-  ciudad: string | null
-  pais: string | null
+  email: string // Asegúrate de que el perfil traiga el email
   avatar_url: string | null
 }
 
@@ -34,43 +26,35 @@ export function CedulaSection({
   textColor,
   primaryColor = "#10b981"
 }: CedulaSectionProps) {
-  const [cedula, setCedula] = useState(profile?.cedula || "")
   const [isLoading, setIsLoading] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
-  const supabase = createClient()
-
-  // URL de tu bot Lex Finanzas
-  const TELEGRAM_BOT_URL = "https://t.me/Lex_Mis_Finanzas_bot"
 
   const handleUpdateAndRedirect = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!cedula.trim() || !profile) return
+    if (!profile?.email) return
 
     setIsLoading(true)
+    
+    // 1. Preparamos la URL de Telegram con el correo como parámetro 'start'
+    // El parámetro 'start' en Telegram no acepta caracteres especiales raros, 
+    // así que lo limpiamos un poco por seguridad.
+    const encodedEmail = btoa(profile.email).replace(/=/g, ""); // Usamos Base64 simple para evitar líos con puntos o arrobas en la URL
+    const TELEGRAM_BOT_URL = `https://t.me/Lex_Mis_Finanzas_bot?start=${encodedEmail}`
+
     try {
-      // 1. Guardamos en Supabase
-      const { error } = await supabase
-        .from("user_profiles")
-        .update({ 
-          cedula: cedula.trim(), 
-          updated_at: new Date().toISOString() 
-        })
-        .eq("id", profile.id)
-
-      if (error) throw error
-      
       setIsSaved(true)
-
-      // 2. Redirección forzada usando el método más compatible
-      // Abrimos en la misma pestaña para evitar bloqueadores de pop-ups
-      window.location.replace(TELEGRAM_BOT_URL)
+      
+      // 2. Redirección automática
+      // Esperamos un segundo para que el usuario vea el estado "Redirigiendo"
+      setTimeout(() => {
+        window.location.href = TELEGRAM_BOT_URL
+      }, 1000)
 
     } catch (error) {
-      console.error("Error updating profile:", error)
-      // Fallback: Si falla la DB, intentamos enviarlo al bot de todos modos
-      window.location.replace(TELEGRAM_BOT_URL)
+      console.error("Error redirecting:", error)
+      window.location.href = `https://t.me/Lex_Mis_Finanzas_bot?start=${profile.email}`
     } finally {
-      setIsLoading(false)
+      // No reseteamos el loading para mantener la sensación de redirección
     }
   }
 
@@ -82,7 +66,7 @@ export function CedulaSection({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold flex items-center gap-2" style={{ color: textColor }}>
               <User className="h-4 w-4" style={{ color: primaryColor }} />
-              Tu Información
+              Tu Cuenta
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -98,7 +82,7 @@ export function CedulaSection({
                   {profile.nombres} {profile.apellidos}
                 </p>
                 <p className="text-[11px] opacity-70 italic" style={{ color: textColor }}>
-                  ID: {profile.cedula || "No registrada"}
+                  {profile.email}
                 </p>
               </div>
             </div>
@@ -121,35 +105,16 @@ export function CedulaSection({
                 Vinculación Telegram
               </CardTitle>
               <CardDescription className="text-[11px] font-medium" style={{ color: textColor, opacity: 0.7 }}>
-                Actualiza tu cédula para recibir notificaciones
+                Conecta tu cuenta para registrar gastos por voz o chat.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleUpdateAndRedirect} className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="cedula-input" className="text-[11px] font-bold uppercase tracking-wider opacity-80" style={{ color: textColor }}>
-                Número de Cédula
-              </label>
-              <Input
-                id="cedula-input"
-                type="text"
-                placeholder="Ingresa tu documento"
-                value={cedula}
-                onChange={(e) => setCedula(e.target.value)}
-                className="h-9 text-sm"
-                style={{ 
-                  backgroundColor: `${textColor}05`,
-                  color: textColor,
-                  borderColor: `${textColor}20`
-                }}
-              />
-            </div>
-
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !profile}
               className="w-full h-10 gap-2 text-xs font-bold transition-all active:scale-95 text-white"
               style={{ backgroundColor: primaryColor }}
             >
@@ -163,7 +128,7 @@ export function CedulaSection({
               ) : (
                 <>
                   <ExternalLink className="h-4 w-4" />
-                  Actualizar y Vincular Bot
+                  Vincular mi Telegram
                 </>
               )}
             </Button>
@@ -171,7 +136,7 @@ export function CedulaSection({
           
           <div className="mt-4 pt-3 border-t border-border/50">
             <p className="text-[10px] text-center leading-relaxed italic opacity-60" style={{ color: textColor }}>
-              Al actualizar, serás enviado automáticamente a nuestro bot oficial en Telegram.
+              Al hacer clic, se abrirá Telegram. Presiona "Iniciar" para completar la vinculación automática.
             </p>
           </div>
         </CardContent>
