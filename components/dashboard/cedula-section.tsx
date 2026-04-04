@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Send, CheckCircle2, Loader2, User, ExternalLink, Copy, Check } from "lucide-react"
+import { Send, User, ExternalLink, Copy, Check, Sparkles, Fingerprint } from "lucide-react"
 
 interface UserProfile {
   id: string
@@ -30,103 +30,120 @@ export function CedulaSection({
   const [isLoading, setIsLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // Función para copiar el UUID al portapapeles
   const copyToClipboard = () => {
     if (profile?.id) {
       navigator.clipboard.writeText(profile.id)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000) // Reset del icono tras 2s
+      setTimeout(() => setCopied(false), 2000)
     }
   }
 
   const handleRedirect = () => {
     setIsLoading(true)
-    // Redirección limpia al bot sin parámetros conflictivos
     window.location.href = "https://t.me/Lex_Mis_Finanzas_bot"
   }
 
   return (
     <div className="space-y-4">
-      {/* Tarjeta de Identificación de Usuario */}
+      {/* Tarjeta de Identidad y Sueño Financiero */}
       {profile && (
-        <Card className="border-border shadow-sm" style={{ backgroundColor: cardColor }}>
+        <Card className="border-none shadow-lg overflow-hidden" style={{ backgroundColor: cardColor }}>
+          <div className="h-1.5 w-full" style={{ backgroundColor: primaryColor }} />
           <CardHeader className="pb-2">
-            <CardTitle className="text-[12px] font-bold flex items-center gap-2" style={{ color: textColor }}>
-              <User className="h-3 w-3" style={{ color: primaryColor }} />
-              Tu Identificador de Cuenta
+            <CardTitle className="text-[14px] font-bold flex items-center gap-2" style={{ color: textColor }}>
+              <Sparkles className="h-4 w-4" style={{ color: primaryColor }} />
+              Tu Identidad Financiera
             </CardTitle>
+            <CardDescription className="text-[11px] opacity-70" style={{ color: textColor }}>
+              El primer paso hacia tu libertad económica.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between bg-black/5 p-3 rounded-md border border-dashed border-border/50">
-              <code className="text-[11px] font-mono font-bold opacity-90" style={{ color: textColor }}>
-                {profile.id.substring(0, 8)}...{profile.id.substring(profile.id.length - 4)}
-              </code>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 hover:bg-black/10" 
-                onClick={copyToClipboard}
-                title="Copiar ID completo"
+          <CardContent className="space-y-4">
+            {/* Perfil Visual */}
+            <div className="flex items-center gap-3 p-2">
+              <div 
+                className="flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-lg shadow-md"
+                style={{ backgroundColor: primaryColor }}
               >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="h-4 w-4" style={{ color: textColor }} />
-                )}
-              </Button>
+                {profile.nombres?.[0]}{profile.apellidos?.[0]}
+              </div>
+              <div>
+                <p className="text-sm font-bold leading-none mb-1" style={{ color: textColor }}>
+                  {profile.nombres} {profile.apellidos}
+                </p>
+                <p className="text-[11px] opacity-60" style={{ color: textColor }}>
+                  Gestor de Sueños
+                </p>
+              </div>
             </div>
-            <p className="text-[10px] leading-tight opacity-60 italic" style={{ color: textColor }}>
-              Copia este código y pégalo en el chat de Telegram cuando el bot te lo solicite para vincular tu cuenta.
-            </p>
+
+            {/* Caja de ID Estilizada */}
+            <div className="relative group">
+              <div className="absolute -top-2 left-3 bg-white px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border shadow-sm" style={{ color: primaryColor }}>
+                Llave de Sincronización
+              </div>
+              <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2">
+                   <Fingerprint className="h-4 w-4 opacity-40" />
+                   <code className="text-[12px] font-mono font-bold tracking-tighter" style={{ color: textColor }}>
+                    {profile.id.substring(0, 8)}...{profile.id.substring(profile.id.length - 4)}
+                  </code>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 gap-2 bg-white hover:bg-slate-50 transition-all shadow-sm" 
+                  onClick={copyToClipboard}
+                >
+                  {copied ? (
+                    <><Check className="h-3.5 w-3.5 text-green-500" /> <span className="text-[10px]">Copiado</span></>
+                  ) : (
+                    <><Copy className="h-3.5 w-3.5" /> <span className="text-[10px]">Copiar</span></>
+                  )}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
 
       {/* Tarjeta de Acción Telegram */}
       <Card className="border-border shadow-md" style={{ backgroundColor: cardColor }}>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div 
-              className="flex h-9 w-9 items-center justify-center rounded-lg shadow-sm"
-              style={{ backgroundColor: `${primaryColor}20` }}
-            >
-              <Send className="h-4 w-4" style={{ color: primaryColor }} />
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 mb-2">
+              <Send className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <CardTitle className="text-sm font-bold" style={{ color: textColor }}>
-                Bot Lex Finanzas
-              </CardTitle>
-              <CardDescription className="text-[11px] font-medium" style={{ color: textColor, opacity: 0.7 }}>
-                {profile?.telegram_chat_id 
-                  ? "Vinculación activa detectada." 
-                  : "Conecta tu Telegram para registrar gastos por voz."}
-              </CardDescription>
+              <h3 className="text-sm font-bold" style={{ color: textColor }}>¿Listo para el siguiente nivel?</h3>
+              <p className="text-[11px] opacity-70 px-4 mt-1" style={{ color: textColor }}>
+                Vincula tu bot para registrar cada gasto al instante con solo un mensaje de voz o texto.
+              </p>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={handleRedirect}
-            disabled={isLoading || !profile}
-            className="w-full h-10 gap-2 text-xs font-bold transition-all active:scale-95 text-white"
-            style={{ backgroundColor: primaryColor }}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <ExternalLink className="h-4 w-4" />
-                {profile?.telegram_chat_id ? "Abrir Telegram" : "Ir a vincular Telegram"}
-              </>
-            )}
-          </Button>
-          
-          <div className="mt-4 pt-3 border-t border-border/50">
-            <p className="text-[10px] text-center leading-relaxed italic opacity-60" style={{ color: textColor }}>
-              1. Copia tu ID arriba. <br />
-              2. Ve al bot y presiona "Iniciar". <br />
-              3. Pega tu ID cuando el bot te lo pida.
-            </p>
+            
+            <Button
+              onClick={handleRedirect}
+              disabled={isLoading || !profile}
+              className="w-full h-11 gap-2 text-xs font-bold transition-all hover:brightness-110 active:scale-[0.98] text-white shadow-md"
+              style={{ backgroundColor: primaryColor }}
+            >
+              {isLoading ? (
+                "Abriendo Telegram..."
+              ) : (
+                <>
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir Lex Finanzas Bot
+                </>
+              )}
+            </Button>
+
+            <div className="flex justify-center gap-4 text-[10px] opacity-40 italic">
+              <span>1. Copia</span>
+              <span>→</span>
+              <span>2. Inicia</span>
+              <span>→</span>
+              <span>3. Pega</span>
+            </div>
           </div>
         </CardContent>
       </Card>
