@@ -23,14 +23,17 @@ export default function TransaccionesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Obtenemos el perfil para sacar la cédula vinculada
-      const { data: profileData } = await supabase
+      // IMPORTANTE: Traemos nombres, apellidos, cedula y avatar_url 
+      // de la tabla user_profiles que es la que estamos reescribiendo
+      const { data: profileData, error } = await supabase
         .from("user_profiles")
-        .select("*")
+        .select("nombres, apellidos, cedula, avatar_url")
         .eq("id", user.id)
         .single()
       
-      setProfile(profileData)
+      if (profileData) {
+        setProfile(profileData)
+      }
     }
     fetchProfile()
   }, [supabase])
@@ -52,6 +55,7 @@ export default function TransaccionesPage() {
           sidebarCollapsed && "lg:ml-16"
         )}
       >
+        {/* Aquí la TopBar ya recibe el avatar_url actualizado */}
         <TopBar 
           userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
           avatarUrl={profile?.avatar_url}
@@ -75,7 +79,6 @@ export default function TransaccionesPage() {
             </Button>
           </div>
 
-          {/* Pasamos la cédula para que la tabla muestre los datos del bot */}
           <TransactionsTable 
             cardColor={theme.card_color} 
             textColor={theme.text_color} 
