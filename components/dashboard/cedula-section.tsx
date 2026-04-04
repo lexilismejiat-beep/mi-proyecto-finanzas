@@ -1,16 +1,17 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Send, User, ExternalLink, Copy, Check, Sparkles, Fingerprint } from "lucide-react"
+import { Copy, Check, Fingerprint, Mail, Target, ExternalLink } from "lucide-react"
 
 interface UserProfile {
   id: string
-  full_name: string // Campo real en tu tabla
+  full_name: string
   email: string
   avatar_url: string | null
-  telegram_chat_id?: string | null
+  dream?: string | null
+  cedula?: string | null
 }
 
 interface CedulaSectionProps {
@@ -22,14 +23,12 @@ interface CedulaSectionProps {
 
 export function CedulaSection({ 
   profile,
-  cardColor = "#1A1B1F", 
-  textColor = "#FFFFFF",
-  primaryColor = "#10b981"
+  cardColor = "#FFFFFF", 
+  textColor = "#1e293b",
+  primaryColor = "#10b981" 
 }: CedulaSectionProps) {
-  const [isLoading, setIsLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // Función de copiado con protección de nulidad
   const copyToClipboard = () => {
     if (profile?.id) {
       navigator.clipboard.writeText(profile.id)
@@ -38,79 +37,78 @@ export function CedulaSection({
     }
   }
 
-  const handleRedirect = () => {
-    setIsLoading(true)
-    window.location.href = "https://t.me/Lex_Mis_Finanzas_bot"
-  }
-
-  // Si el perfil no ha cargado, mostramos un estado simple para evitar el crash
-  if (!profile) {
-    return (
-      <Card className="p-6 text-center opacity-50" style={{ backgroundColor: cardColor, color: textColor }}>
-        Cargando identidad...
-      </Card>
-    )
-  }
+  if (!profile) return <div className="h-64 w-full bg-gray-100 animate-pulse rounded-2xl" />
 
   return (
     <div className="space-y-4">
-      <Card className="border-none shadow-xl overflow-hidden" style={{ backgroundColor: cardColor, color: textColor }}>
-        <div className="h-1.5 w-full" style={{ backgroundColor: primaryColor }} />
-        <CardHeader className="pb-2">
-          <CardTitle className="text-[14px] font-bold flex items-center gap-2">
-            <Sparkles className="h-4 w-4" style={{ color: primaryColor }} />
-            Tu Identidad Financiera
-          </CardTitle>
-        </CardHeader>
+      {/* Tarjeta de Identidad Premium */}
+      <Card className="border-none shadow-xl overflow-hidden rounded-2xl" style={{ backgroundColor: cardColor }}>
+        <div className="h-2 w-full" style={{ backgroundColor: primaryColor }} />
         
-        <CardContent className="space-y-6">
-          {/* Perfil Visual */}
-          <div className="flex items-center gap-4">
-            <div 
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-white/10 shadow-lg overflow-hidden"
-              style={{ backgroundColor: primaryColor }}
-            >
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-xl font-bold">{profile.full_name?.charAt(0) || "U"}</span>
-              )}
+        <CardContent className="p-6 space-y-6">
+          {/* Encabezado: Foto y Nombre */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="relative">
+              <div className="h-20 w-20 rounded-full border-4 border-slate-100 shadow-inner overflow-hidden flex items-center justify-center bg-slate-200">
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-2xl font-bold opacity-40">{profile.full_name?.charAt(0)}</span>
+                )}
+              </div>
+              <div className="absolute -bottom-1 -right-1 bg-white p-1 rounded-full shadow-sm">
+                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: primaryColor }} />
+              </div>
             </div>
-            <div className="overflow-hidden">
-              <p className="text-base font-bold truncate">
-                {profile.full_name || "Usuario"}
-              </p>
-              <p className="text-[10px] opacity-50 uppercase tracking-tighter">
-                Gestor de Sueños
+            
+            <div>
+              <h3 className="text-lg font-bold" style={{ color: textColor }}>{profile.full_name}</h3>
+              <div className="flex items-center justify-center gap-1.5 opacity-60">
+                <Mail className="h-3 w-3" />
+                <span className="text-[11px]">{profile.email}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sección del Sueño (Viene de Configuración) */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-start gap-3">
+            <div className="mt-1 p-2 bg-white rounded-lg shadow-sm">
+              <Target className="h-4 w-4" style={{ color: primaryColor }} />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-bold tracking-wider opacity-40">Mi Sueño Financiero</p>
+              <p className="text-sm font-medium italic" style={{ color: textColor }}>
+                {profile.dream || "Aún no has definido una meta en configuración"}
               </p>
             </div>
           </div>
 
-          {/* Caja de ID (La "Llave") */}
+          {/* ID de Sincronización */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10">
+            <p className="text-[10px] font-bold opacity-40 ml-1">ID DE VINCULACIÓN</p>
+            <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl">
               <div className="flex items-center gap-2 overflow-hidden">
-                <Fingerprint className="h-4 w-4 shrink-0 opacity-40" />
-                <code className="text-[11px] font-mono opacity-80 truncate">
-                  {profile.id}
+                <Fingerprint className="h-4 w-4 text-white/30" />
+                <code className="text-[10px] text-white/80 font-mono truncate">
+                  {profile.id.substring(0, 18)}...
                 </code>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 hover:bg-white/10 shrink-0" 
+                className="h-8 w-8 text-white hover:bg-white/10" 
                 onClick={copyToClipboard}
               >
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </div>
 
-          {/* Botón Telegram */}
-          <Button
-            onClick={handleRedirect}
-            className="w-full h-11 gap-2 text-xs font-bold transition-all hover:brightness-110 text-white rounded-xl"
+          {/* Botón de Acción */}
+          <Button 
+            className="w-full h-11 rounded-xl font-bold text-white gap-2 shadow-lg transition-transform active:scale-95"
             style={{ backgroundColor: primaryColor }}
+            onClick={() => window.open("https://t.me/Lex_Mis_Finanzas_bot", "_blank")}
           >
             <ExternalLink className="h-4 w-4" />
             Vincular Telegram
