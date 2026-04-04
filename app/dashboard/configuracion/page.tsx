@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Palette, Shield, Loader2, Save, Target, Camera, MapPin, Phone, User as UserIcon } from "lucide-react"
+import { Loader2, Save, Target, Camera, MapPin, User as UserIcon } from "lucide-react"
 
 export default function ConfiguracionPage() {
   const supabase = createClient()
@@ -24,28 +24,31 @@ export default function ConfiguracionPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
+  // 1. CARGAR DATOS DESDE USER_PROFILES
   useEffect(() => {
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        // Consultamos la tabla user_profiles que es la que usas en el registro
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("user_profiles")
           .select("*")
           .eq("id", user.id)
           .single()
-        setProfile(data)
+        
+        if (data) setProfile(data)
       }
       setLoading(false)
     }
     loadProfile()
   }, [supabase])
 
+  // 2. LÓGICA DE SUBIDA DE FOTO
   const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploading(true)
       const file = event.target.files?.[0]
       if (!file) return
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
@@ -53,171 +56,189 @@ export default function ConfiguracionPage() {
       const fileName = `${user.id}-${Math.random()}.${fileExt}`
       const filePath = `avatars/${fileName}`
 
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file)
+
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath)
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
       setProfile({ ...profile, avatar_url: publicUrl })
-      toast.success("Vista previa de foto lista")
+      toast.success("Foto cargada con éxito")
     } catch (error: any) {
-      toast.error("Error al subir: " + error.message)
+      toast.error("Error al subir imagen: " + error.message)
     } finally {
       setUploading(false)
     }
   }
 
+  // 3. GUARDAR TODOS LOS CAMBIOS
   const handleSaveAll = async () => {
     setIsSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
 
+    if (!user) return
+
+    // Eliminamos campos que no deben ir en el update si existen
+    const { id, created_at, email, ...updateData } = profile
+
     const { error } = await supabase
       .from("user_profiles")
       .update({
-        ...profile, // Esto incluye nombres, apellidos, cedula, telefono, fecha_nacimiento, genero, direccion, ciudad, pais, dream y avatar_url
-        primary_color: theme.primary_color,
-        sidebar_color: theme.sidebar_color,
+        ...updateData,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", user?.id)
+      .eq("id", user.id)
 
-    if (error) toast.error("Error: " + error.message)
-    else toast.success("¡Toda tu información ha sido actualizada!")
+    if (error) {
+      toast.error("Error al guardar: " + error.message)
+    } else {
+      toast.success("¡Información actualizada correctamente!")
+      // Refrescamos para asegurar que el Dashboard vea los cambios
+      setTimeout(() => window.location.reload(), 1000)
+    }
     setIsSaving(false)
   }
 
-  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-[#0a0a0a]">
+      <Loader2 className="animate-spin text-emerald-500" />
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-background pb-10">
+    <div className="min-h-screen bg-[#0a0a0a] pb-10">
       <Sidebar sidebarColor={theme.sidebar_color} />
       
       <div className="lg:ml-64 transition-all duration-300">
-        <TopBar userName={`${profile?.nombres} ${profile?.apellidos}`} avatarUrl={profile?.avatar_url} />
+        <TopBar userName={profile?.nombres} avatarUrl={profile?.avatar_url} />
 
         <main className="p-6 space-y-6 max-w-6xl mx-auto">
-          <div className="flex items-center justify-between">
+          {/* CABECERA CON BOTÓN VERDE */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Configuración de Cuenta</h1>
-              <p className="text-muted-foreground text-sm">Gestiona tu identidad y preferencias del sistema</p>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Configuración de Perfil</h1>
+              <p className="text-gray-400 text-sm">Personaliza tu identidad y tus metas financieras</p>
             </div>
-            <Button onClick={handleSaveAll} disabled={isSaving} style={{ backgroundColor: theme.primary_color }} className="text-white gap-2 shadow-md">
+            
+            <Button 
+              onClick={handleSaveAll} 
+              disabled={isSaving}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 shadow-lg shadow-emerald-900/20 gap-2 transition-all active:scale-95"
+            >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Guardar Cambios
+              Guardar Configuración
             </Button>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
+            
             {/* COLUMNA IZQUIERDA: FOTO Y SUEÑO */}
             <div className="space-y-6">
-              <Card className="text-center p-6 shadow-sm border-none bg-card/50 backdrop-blur">
-                <div className="relative mx-auto h-32 w-32 mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                  <div className="h-full w-full rounded-full border-4 overflow-hidden shadow-inner" style={{ borderColor: theme.primary_color }}>
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center bg-muted text-2xl font-bold">
-                        {profile?.nombres?.charAt(0)}
-                      </div>
-                    )}
+              <Card className="bg-[#121212] border-zinc-800 text-white shadow-xl overflow-hidden">
+                <div className="h-2 w-full bg-emerald-600" />
+                <CardContent className="pt-8 flex flex-col items-center">
+                  <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <div className="h-32 w-32 rounded-full border-4 border-zinc-800 overflow-hidden shadow-2xl transition-transform group-hover:scale-105">
+                      {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-zinc-800 text-4xl font-bold text-emerald-500">
+                          {profile?.nombres?.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      {uploading ? <Loader2 className="h-6 w-6 animate-spin text-white" /> : <Camera className="h-8 w-8 text-white" />}
+                    </div>
                   </div>
-                  <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Camera className="text-white h-6 w-6" />
-                  </div>
-                  <input type="file" ref={fileInputRef} onChange={handleUploadAvatar} className="hidden" accept="image/*" />
-                </div>
-                <h3 className="font-bold text-lg">{profile?.nombres} {profile?.apellidos}</h3>
-                <p className="text-xs text-muted-foreground mb-4 italic">{profile?.email}</p>
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="w-full text-xs">
-                   {uploading ? "Subiendo..." : "Cambiar Foto de Perfil"}
-                </Button>
+                  <input type="file" ref={fileInputRef} onChange={handleUploadAvatar} accept="image/*" className="hidden" />
+                  <h3 className="mt-4 text-lg font-bold">{profile?.nombres} {profile?.apellidos}</h3>
+                  <p className="text-xs text-zinc-500 lowercase">{profile?.genero || "Usuario"}</p>
+                </CardContent>
               </Card>
 
-              <Card className="border-t-4 shadow-sm" style={{ borderTopColor: theme.primary_color }}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2"><Target className="h-4 w-4" /> Meta Financiera</CardTitle>
+              <Card className="bg-[#121212] border-zinc-800 text-white shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Target className="h-4 w-4 text-emerald-500" /> MI META FINANCIERA
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Textarea 
-                    placeholder="¿Por qué ahorras? (Casa, moto, viaje...)" 
-                    value={profile?.dream || ""} 
+                    placeholder="¿Cuál es tu gran sueño? (Ej: Comprar mi primera casa)"
+                    className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 min-h-[120px] focus:border-emerald-500 focus:ring-emerald-500"
+                    value={profile?.dream || ""}
                     onChange={(e) => setProfile({...profile, dream: e.target.value})}
-                    className="min-h-[120px] text-sm resize-none"
                   />
                 </CardContent>
               </Card>
             </div>
 
-            {/* COLUMNA DERECHA: DATOS DEL REGISTRO */}
+            {/* COLUMNA DERECHA: DATOS PERSONALES (REGISTRO) */}
             <div className="lg:col-span-2 space-y-6">
-              <Card className="shadow-sm border-none">
+              <Card className="bg-[#121212] border-zinc-800 text-white shadow-xl">
                 <CardHeader>
-                  <CardTitle className="text-md flex items-center gap-2"><UserIcon className="h-4 w-4" /> Información Personal</CardTitle>
-                  <CardDescription>Datos básicos proporcionados en el registro</CardDescription>
+                  <CardTitle className="flex items-center gap-2 text-md">
+                    <UserIcon className="h-5 w-5 text-emerald-500" /> Información Personal
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Nombres</Label>
+                      <Input className="bg-zinc-900 border-zinc-700 text-white" value={profile?.nombres || ""} onChange={(e) => setProfile({...profile, nombres: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Apellidos</Label>
+                      <Input className="bg-zinc-900 border-zinc-700 text-white" value={profile?.apellidos || ""} onChange={(e) => setProfile({...profile, apellidos: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Cédula / Documento</Label>
+                      <Input className="bg-zinc-900 border-zinc-700 text-white" value={profile?.cedula || ""} onChange={(e) => setProfile({...profile, cedula: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Teléfono</Label>
+                      <Input className="bg-zinc-900 border-zinc-700 text-white" value={profile?.telefono || ""} onChange={(e) => setProfile({...profile, telefono: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Género</Label>
+                      <Select value={profile?.genero} onValueChange={(v) => setProfile({...profile, genero: v})}>
+                        <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white">
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                          <SelectItem value="masculino">Masculino</SelectItem>
+                          <SelectItem value="femenino">Femenino</SelectItem>
+                          <SelectItem value="otro">Otro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Fecha de Nacimiento</Label>
+                      <Input type="date" className="bg-zinc-900 border-zinc-700 text-white" value={profile?.fecha_nacimiento || ""} onChange={(e) => setProfile({...profile, fecha_nacimiento: e.target.value})} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-[#121212] border-zinc-800 text-white shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-md">
+                    <MapPin className="h-5 w-5 text-emerald-500" /> Ubicación
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Nombres</Label>
-                    <Input value={profile?.nombres || ""} onChange={(e) => setProfile({...profile, nombres: e.target.value})} />
+                    <Label className="text-zinc-300">Dirección</Label>
+                    <Input className="bg-zinc-900 border-zinc-700 text-white" value={profile?.direccion || ""} onChange={(e) => setProfile({...profile, direccion: e.target.value})} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Apellidos</Label>
-                    <Input value={profile?.apellidos || ""} onChange={(e) => setProfile({...profile, apellidos: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Cédula / ID</Label>
-                    <Input value={profile?.cedula || ""} onChange={(e) => setProfile({...profile, cedula: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Teléfono</Label>
-                    <Input value={profile?.telefono || ""} onChange={(e) => setProfile({...profile, telefono: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Género</Label>
-                    <Select value={profile?.genero} onValueChange={(v) => setProfile({...profile, genero: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="masculino">Masculino</SelectItem>
-                        <SelectItem value="femenino">Femenino</SelectItem>
-                        <SelectItem value="otro">Otro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Fecha de Nacimiento</Label>
-                    <Input type="date" value={profile?.fecha_nacimiento || ""} onChange={(e) => setProfile({...profile, fecha_nacimiento: e.target.value})} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm border-none">
-                <CardHeader>
-                  <CardTitle className="text-md flex items-center gap-2"><MapPin className="h-4 w-4" /> Ubicación</CardTitle>
-                </CardHeader>
-                <CardContent className="grid md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 space-y-2">
-                    <Label>Dirección</Label>
-                    <Input value={profile?.direccion || ""} onChange={(e) => setProfile({...profile, direccion: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Ciudad</Label>
-                    <Input value={profile?.ciudad || ""} onChange={(e) => setProfile({...profile, ciudad: e.target.value})} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* APARIENCIA */}
-              <Card className="shadow-sm border-none bg-slate-50/50">
-                <CardHeader>
-                  <CardTitle className="text-md flex items-center gap-2"><Palette className="h-4 w-4" /> Apariencia del Sistema</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-4">
-                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border flex-1 min-w-[200px]">
-                    <div className="h-6 w-6 rounded-full" style={{ backgroundColor: theme.primary_color }} />
-                    <span className="text-sm font-medium">Color Primario Activo</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border flex-1 min-w-[200px]">
-                    <div className="h-6 w-6 rounded-full" style={{ backgroundColor: theme.sidebar_color }} />
-                    <span className="text-sm font-medium">Menú Lateral Activo</span>
+                    <Label className="text-zinc-300">Ciudad</Label>
+                    <Input className="bg-zinc-900 border-zinc-700 text-white" value={profile?.ciudad || ""} onChange={(e) => setProfile({...profile, ciudad: e.target.value})} />
                   </div>
                 </CardContent>
               </Card>
