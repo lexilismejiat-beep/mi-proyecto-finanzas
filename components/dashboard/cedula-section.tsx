@@ -11,7 +11,7 @@ interface UserProfile {
   apellidos: string
   email: string
   avatar_url: string | null
-  cedula?: string // Por si aún usas este campo en otros lados
+  telegram_chat_id?: string | null // Añadimos esto para saber si ya está vinculado
 }
 
 interface CedulaSectionProps {
@@ -37,7 +37,7 @@ export function CedulaSection({
     e.preventDefault()
     
     // Usamos el ID del perfil porque es un UUID seguro para Telegram 
-    // (no contiene @ ni puntos que rompan el enlace)
+    // No contiene caracteres especiales que rompan el parámetro 'start'
     if (!profile?.id) return
 
     setIsLoading(true)
@@ -45,18 +45,17 @@ export function CedulaSection({
     try {
       setIsSaved(true)
       
-      // Construimos la URL: t.me/bot?start=ID_DE_USUARIO
-      // Telegram enviará al bot: "/start ID_DE_USUARIO"
+      // Construimos la URL: t.me/bot?start=UUID
+      // Al pulsar "Iniciar", el bot recibe: "/start UUID"
       const TELEGRAM_BOT_URL = `${BASE_BOT_URL}?start=${profile.id}`
 
-      // Redirección con un pequeño delay para feedback visual
+      // Pequeño delay para que el usuario vea el estado de carga
       setTimeout(() => {
         window.location.href = TELEGRAM_BOT_URL
       }, 1000)
 
     } catch (error) {
       console.error("Error redirecting to Telegram:", error)
-      // Fallback en caso de error
       window.location.href = BASE_BOT_URL
     }
   }
@@ -69,7 +68,7 @@ export function CedulaSection({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold flex items-center gap-2" style={{ color: textColor }}>
               <User className="h-4 w-4" style={{ color: primaryColor }} />
-              Tu Información
+              Tu Perfil
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -105,10 +104,12 @@ export function CedulaSection({
             </div>
             <div>
               <CardTitle className="text-sm font-bold" style={{ color: textColor }}>
-                Vinculación Telegram
+                Bot Lex Finanzas
               </CardTitle>
               <CardDescription className="text-[11px] font-medium" style={{ color: textColor, opacity: 0.7 }}>
-                Activa tu bot para registrar gastos automáticamente
+                {profile?.telegram_chat_id 
+                  ? "Tu cuenta ya está vinculada." 
+                  : "Vincula tu bot para registrar gastos por chat."}
               </CardDescription>
             </div>
           </div>
@@ -126,12 +127,12 @@ export function CedulaSection({
               ) : isSaved ? (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Conectando con Telegram...
+                  Abriendo Telegram...
                 </>
               ) : (
                 <>
                   <ExternalLink className="h-4 w-4" />
-                  Actualizar y Vincular Bot
+                  {profile?.telegram_chat_id ? "Sincronizar de nuevo" : "Vincular mi Telegram"}
                 </>
               )}
             </Button>
@@ -139,7 +140,7 @@ export function CedulaSection({
           
           <div className="mt-4 pt-3 border-t border-border/50">
             <p className="text-[10px] text-center leading-relaxed italic opacity-60" style={{ color: textColor }}>
-              Al hacer clic, serás enviado a Telegram. Solo presiona el botón "Iniciar" en el chat para terminar.
+              Al iniciar el bot, tu ID de Telegram se guardará automáticamente en tu perfil para que puedas registrar gastos de inmediato.
             </p>
           </div>
         </CardContent>
