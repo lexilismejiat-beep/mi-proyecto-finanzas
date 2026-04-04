@@ -21,25 +21,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Obtener el usuario autenticado (el UUID de Google)
+      // 1. Obtener el usuario autenticado
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 2. Buscar en 'profiles' la cédula vinculada a ese UUID
+      // 2. Traemos TODO el perfil incluyendo avatar y email
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("*")
+        .select("*") // Esto ya trae nombres, apellidos, avatar_url, email, id, etc.
         .eq("id", user.id)
         .single()
       
       setProfile(profileData)
 
-      // 3. Si el usuario tiene una cédula registrada, buscamos sus transacciones
+      // 3. Cálculo de finanzas basado en la cédula vinculada
       if (profileData?.cedula) {
         const { data: transData } = await supabase
           .from("transacciones")
           .select("monto, tipo")
-          // Filtramos donde user_id de la transaccion sea igual a la cédula del perfil
           .eq("user_id", profileData.cedula) 
 
         if (transData) {
@@ -58,7 +57,6 @@ export default function DashboardPage() {
           })
         }
       } else {
-        // Si no hay cédula, reseteamos totales a 0
         setTotals({ income: 0, expenses: 0, balance: 0 })
       }
     }
@@ -66,7 +64,7 @@ export default function DashboardPage() {
   }, [supabase])
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" style={{ backgroundColor: "#F8FAFC" }}>
       <Sidebar 
         collapsed={sidebarCollapsed} 
         onCollapsedChange={setSidebarCollapsed}
@@ -74,18 +72,28 @@ export default function DashboardPage() {
         onMobileOpenChange={setMobileSidebarOpen}
         sidebarColor={theme.sidebar_color}
       />
-      <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
+      
+      <div className={cn(
+        "transition-all duration-300 min-h-screen", 
+        "lg:ml-64", 
+        sidebarCollapsed && "lg:ml-16"
+      )}>
         <TopBar 
-          userName={profile?.full_name || "Usuario"} 
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
-        <main className="p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold" style={{ color: theme.text_color }}>Resumen Financiero</h2>
+
+        <main className="p-4 md:p-8">
+          <div className="mb-8">
+            <h2 className="text-3xl font-extrabold tracking-tight" style={{ color: theme.text_color }}>
+              Resumen Financiero
+            </h2>
+            <p className="text-sm opacity-60">Gestiona tu libertad económica hoy.</p>
           </div>
 
-          <div className="mb-6">
+          {/* Tarjetas de Estadísticas Principales */}
+          <div className="mb-8">
             <StatsCards 
               totalIncome={totals.income} 
               totalExpenses={totals.expenses} 
@@ -96,20 +104,23 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              {/* Pasamos la cédula a la tabla para que filtre internamente también */}
+          <div className="grid gap-8 lg:grid-cols-3 items-start">
+            {/* Tabla de Transacciones (Ocupa 2 columnas) */}
+            <div className="lg:col-span-2 order-2 lg:order-1">
               <TransactionsTable 
                 cardColor={theme.card_color} 
                 textColor={theme.text_color} 
                 userCedula={profile?.cedula} 
               />
             </div>
-            <div className="lg:col-span-1">
+
+            {/* Nueva Sección de Identidad Financiera (Ocupa 1 columna) */}
+            <div className="lg:col-span-1 order-1 lg:order-2">
               <CedulaSection 
                 profile={profile} 
                 cardColor={theme.card_color} 
                 textColor={theme.text_color} 
+                primaryColor={theme.primary_color}
               />
             </div>
           </div>
