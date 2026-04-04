@@ -78,13 +78,15 @@ export default function ConfiguracionPage() {
   }
 
   const handleSaveAll = async () => {
-    setIsSaving(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+  setIsSaving(true);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-      // IMPORTANTE: Limpiamos los datos para no enviar campos prohibidos
-      const updatePayload = {
+    // 1. Guardamos los datos personales en 'user_profiles'
+    const { error: errorUser } = await supabase
+      .from("user_profiles")
+      .update({
         nombres: profile.nombres,
         apellidos: profile.apellidos,
         cedula: profile.cedula,
@@ -93,30 +95,40 @@ export default function ConfiguracionPage() {
         fecha_nacimiento: profile.fecha_nacimiento,
         direccion: profile.direccion,
         ciudad: profile.ciudad,
-        avatar_url: profile.avatar_url, // Se guarda en user_profiles
-        dream: profile.dream,           // Se guarda en user_profiles
         updated_at: new Date().toISOString(),
-      }
+      })
+      .eq("id", user.id);
 
-      const { error } = await supabase
-        .from("user_profiles")
-        .update(updatePayload)
-        .eq("id", user.id)
+    if (errorUser) throw errorUser;
 
-      if (error) throw error
-      
-      toast.success("¡Configuración guardada exitosamente!")
-      
-      // Forzamos recarga para actualizar la UI global
-      setTimeout(() => window.location.reload(), 1000)
+    // 2. Guardamos la FOTO y el SUEÑO en la tabla 'profiles' (donde realmente viven)
+    // Según tus capturas, aquí es donde se almacena la info del dashboard
+    const { error: errorMain } = await supabase
+      .from("profiles")
+      .update({
+        avatar_url: profile.avatar_url,
+        dream: profile.dream,
+        full_name: `${profile.nombres} ${profile.apellidos}`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
 
-    } catch (error: any) {
-      console.error(error)
-      toast.error("No se pudo guardar: " + error.message)
-    } finally {
-      setIsSaving(false)
-    }
+    if (errorMain) throw errorMain;
+
+    toast.success("¡Cambios guardados permanentemente!");
+    
+    // Opcional: Pequeña pausa antes de recargar para que el usuario vea el éxito
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
+
+  } catch (error: any) {
+    console.error("Error al guardar:", error);
+    toast.error("Error: " + error.message);
+  } finally {
+    setIsSaving(false);
   }
+};
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-black"><Loader2 className="animate-spin text-emerald-500" /></div>
 
