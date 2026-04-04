@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
   const supabase = createClient()
@@ -21,50 +22,60 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Obtener el usuario autenticado
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      try {
+        setLoading(true)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-      // 2. Traemos TODO el perfil incluyendo avatar y email
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*") // Esto ya trae nombres, apellidos, avatar_url, email, id, etc.
-        .eq("id", user.id)
-        .single()
-      
-      setProfile(profileData)
+        // 1. Buscamos en la tabla 'profiles' que es la que tiene el 'full_name' y 'cedula'
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle()
+        
+        if (profileData) {
+          setProfile(profileData)
 
-      // 3. Cálculo de finanzas basado en la cédula vinculada
-      if (profileData?.cedula) {
-        const { data: transData } = await supabase
-          .from("transacciones")
-          .select("monto, tipo")
-          .eq("user_id", profileData.cedula) 
+          // 2. Cálculo de finanzas usando la cédula como user_id
+          if (profileData.cedula) {
+            const { data: transData } = await supabase
+              .from("transacciones")
+              .select("monto, tipo")
+              .eq("user_id", profileData.cedula) 
 
-        if (transData) {
-          const income = transData
-            .filter((t: any) => t.tipo?.trim() === "Ingreso")
-            .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-          
-          const expenses = transData
-            .filter((t: any) => t.tipo?.trim() === "Egreso")
-            .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            if (transData) {
+              const income = transData
+                .filter((t: any) => t.tipo?.trim() === "Ingreso")
+                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+              
+              const expenses = transData
+                .filter((t: any) => t.tipo?.trim() === "Egreso")
+                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
 
-          setTotals({
-            income,
-            expenses,
-            balance: income - expenses
-          })
+              setTotals({ income, expenses, balance: income - expenses })
+            }
+          }
         }
-      } else {
-        setTotals({ income: 0, expenses: 0, balance: 0 })
+      } catch (err) {
+        console.error("Error en Dashboard:", err)
+      } finally {
+        setLoading(false)
       }
     }
     fetchData()
   }, [supabase])
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">
+        <p className="animate-pulse">Cargando tus finanzas...</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#F8FAFC" }}>
+    <div className="min-h-screen" style={{ backgroundColor: theme.background_color || "#F8FAFC" }}>
       <Sidebar 
         collapsed={sidebarCollapsed} 
         onCollapsedChange={setSidebarCollapsed}
@@ -79,20 +90,19 @@ export default function DashboardPage() {
         sidebarCollapsed && "lg:ml-16"
       )}>
         <TopBar 
-          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          // CORRECCIÓN: Usamos full_name de tu tabla profiles
+          userName={profile?.full_name || "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
         <main className="p-4 md:p-8">
           <div className="mb-8">
-            <h2 className="text-3xl font-extrabold tracking-tight" style={{ color: theme.text_color }}>
+            <h2 className="text-3xl font-bold" style={{ color: theme.text_color }}>
               Resumen Financiero
             </h2>
-            <p className="text-sm opacity-60">Gestiona tu libertad económica hoy.</p>
           </div>
 
-          {/* Tarjetas de Estadísticas Principales */}
           <div className="mb-8">
             <StatsCards 
               totalIncome={totals.income} 
@@ -104,9 +114,8 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-3 items-start">
-            {/* Tabla de Transacciones (Ocupa 2 columnas) */}
-            <div className="lg:col-span-2 order-2 lg:order-1">
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2">
               <TransactionsTable 
                 cardColor={theme.card_color} 
                 textColor={theme.text_color} 
@@ -114,8 +123,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Nueva Sección de Identidad Financiera (Ocupa 1 columna) */}
-            <div className="lg:col-span-1 order-1 lg:order-2">
+            <div className="lg:col-span-1">
               <CedulaSection 
                 profile={profile} 
                 cardColor={theme.card_color} 
