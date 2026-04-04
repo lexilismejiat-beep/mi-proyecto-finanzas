@@ -23,14 +23,16 @@ export default function TransaccionesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Mantenemos la lógica de obtener el perfil de user_profiles
-      const { data: profileData } = await supabase
+      // Obtenemos TODO el perfil de user_profiles para asegurar que avatar_url esté presente
+      const { data: profileData, error } = await supabase
         .from("user_profiles")
-        .select("*") // Esto ya incluye avatar_url, nombres, apellidos y cedula
+        .select("*") 
         .eq("id", user.id)
         .single()
       
-      setProfile(profileData)
+      if (profileData) {
+        setProfile(profileData)
+      }
     }
     fetchProfile()
   }, [supabase])
@@ -53,8 +55,9 @@ export default function TransaccionesPage() {
         )}
       >
         <TopBar 
+          // Construimos el nombre completo desde el perfil cargado
           userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
-          // Pasamos el avatar_url del perfil cargado para que no sea genérico
+          // CRÍTICO: Aquí pasamos la URL de la foto que cargamos en el useEffect
           avatarUrl={profile?.avatar_url} 
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
@@ -76,7 +79,7 @@ export default function TransaccionesPage() {
             </Button>
           </div>
 
-          {/* Mantenemos tu TransactionsTable original para que el historial vuelva a aparecer */}
+          {/* Mantenemos tu tabla intacta para que no se pierdan los registros */}
           <TransactionsTable 
             cardColor={theme.card_color} 
             textColor={theme.text_color} 
