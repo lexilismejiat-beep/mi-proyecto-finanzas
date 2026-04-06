@@ -1,4 +1,4 @@
-name: Mis Finanzas
+name: Build Android APK
 on:
   push:
     branches: [ "main" ]
@@ -32,14 +32,15 @@ jobs:
       - name: Generate Android Assets (Icono Personalizado)
         run: |
           npm install @capacitor/assets
-          # Creamos la carpeta assets y usamos tu favicon como base para el icono de Android
           mkdir -p assets
+          # Usamos tu favicon como base para el icono del móvil
           cp public/favicon.ico assets/logo.png
-          npx @capacitor/assets generate --android
+          # Generamos los iconos con fondo oscuro para que no aparezca el logo de Capacitor
+          npx @capacitor/assets generate --android --iconBackgroundColor '#0a0a0a' --iconBackgroundColorDark '#0a0a0a'
 
       - name: Initialize & Configure Capacitor
         run: |
-          # IMPORTANTE: Aquí forzamos que la App sea un reflejo de tu web para evitar errores de DNS
+          # Configuramos la URL de Vercel para que la sesión se mantenga dentro de la App
           echo '{
             "appId": "com.misfinanzas.app",
             "appName": "Mis Finanzas",
@@ -57,10 +58,10 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Configure Android Manifest (Deep Links & Auth)
+      - name: Configure Android Manifest (Deep Links)
         run: |
           FILE="android/app/src/main/AndroidManifest.xml"
-          # Configuramos el intent-filter para que Supabase reconozca la App como destino de confianza
+          # El parámetro autoVerify="true" es lo que permite que el login de Google te devuelva a la App
           sed -i 's|</activity>|<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter></activity>|g' $FILE
 
       - name: Build with Gradle
@@ -72,5 +73,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MiFinanzas-Icono-Fijo
+          name: Mis-Finanzas-App-Final
           path: android/app/build/outputs/apk/debug/app-debug.apk
