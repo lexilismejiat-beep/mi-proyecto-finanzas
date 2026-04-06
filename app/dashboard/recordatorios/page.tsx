@@ -103,7 +103,7 @@ function ModalRecordatorio({
             <Label className="text-orange-400 font-bold">Configuración del Bot</Label>
             <div className="flex items-center gap-2 text-sm">
               <span>Avisarme</span>
-              <Input name="dias" type="number" defaultValue={editData?.recordar_dias_antes || 10} className="w-16 bg-black/40 border-orange-500/30 text-center text-orange-500 font-bold" min="0" />
+              <Input name="dias" type="number" defaultValue={editData?.recordar_dias_antes || 1} className="w-16 bg-black/40 border-orange-500/30 text-center text-orange-500 font-bold" min="0" />
               <span>días antes.</span>
             </div>
           </div>
@@ -142,14 +142,12 @@ export default function RecordatoriosPage() {
   const [profile, setProfile] = useState<any>(null)
   const [isTestingBot, setIsTestingBot] = useState(false)
 
-  // Función para cargar datos iniciales
   const fetchData = async () => {
     try {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Obtenemos el perfil actualizado con telegram_chat_id
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
@@ -177,51 +175,39 @@ export default function RecordatoriosPage() {
     fetchData() 
   }, [])
 
-  // --- FUNCIÓN DEL BOTÓN TEST (CONECTADA A EDGE FUNCTION) ---
+  // --- FUNCIÓN DEL BOTÓN TEST ACTUALIZADA ---
   const handleTestBot = async () => {
-  // 1. Verificación básica del Chat ID
-  if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
-    toast.error("Vincule su ID de Telegram numérico en su perfil.");
-    return;
-  }
-
-  setIsTestingBot(true);
-  try {
-    // 2. Llamada a la Edge Function
-    const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/rapid-handler', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        isManualTest: true,
-        testChatId: profile.telegram_chat_id
-      })
-    });
-
-    // 3. Manejo de la respuesta
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Respuesta de error:", errorText);
-        throw new Error("Error en la respuesta del servidor");
+    if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
+      toast.error("Vincule su ID de Telegram numérico en su perfil.");
+      return;
     }
 
-    const result = await response.json();
+    setIsTestingBot(true);
+    try {
+      // Usamos GET para evitar el bloqueo de CORS que vimos en los logs
+      const url = `https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/rapid-handler?t=${Date.now()}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        mode: 'cors'
+      });
 
-    if (result.success) {
-      toast.success("✅ ¡Mensaje enviado! Revisa tu Telegram.");
-    } else {
-      console.error("Detalles de Telegram:", result.details);
-      toast.error("Telegram rechazó el mensaje. ¿Iniciaste el bot?");
+      if (!response.ok) throw new Error("Error en la conexión");
+
+      const result = await response.json();
+
+      if (result.success || result.enviados > 0) {
+        toast.success("✅ ¡Recordatorios procesados! Revisa tu Telegram.");
+      } else {
+        toast.error("La función respondió pero no se detectaron envíos.");
+      }
+    } catch (error) {
+      console.error("Error en la petición:", error);
+      toast.error("Error de red. Intenta recargar la página.");
+    } finally {
+      setIsTestingBot(false);
     }
-  } catch (error) {
-    console.error("Error en la petición:", error);
-    toast.error("Error de conexión. Revisa los permisos de CORS en la función.");
-  } finally {
-    setIsTestingBot(false);
-  }
-};
-  
+  };
 
   const handleMarcarComoPagado = async (id: number) => {
     const { error } = await supabase.from("recordatorios").update({ estado: 'completado' }).eq('id', id)
