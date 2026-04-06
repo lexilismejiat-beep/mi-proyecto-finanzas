@@ -1,0 +1,76 @@
+name: Mis Finanzas
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-package-lock --legacy-peer-deps
+
+      - name: Build Next.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Generate Android Assets (Icono Personalizado)
+        run: |
+          npm install @capacitor/assets
+          # Creamos la carpeta assets y usamos tu favicon como base para el icono de Android
+          mkdir -p assets
+          cp public/favicon.ico assets/logo.png
+          npx @capacitor/assets generate --android
+
+      - name: Initialize & Configure Capacitor
+        run: |
+          # IMPORTANTE: Aquí forzamos que la App sea un reflejo de tu web para evitar errores de DNS
+          echo '{
+            "appId": "com.misfinanzas.app",
+            "appName": "Mis Finanzas",
+            "webDir": "out",
+            "server": {
+              "url": "https://mis-finanzas-kappa.vercel.app",
+              "allowNavigation": [
+                "mis-finanzas-kappa.vercel.app",
+                "*.supabase.co"
+              ]
+            }
+          }' > capacitor.config.json
+          npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Configure Android Manifest (Deep Links & Auth)
+        run: |
+          FILE="android/app/src/main/AndroidManifest.xml"
+          # Configuramos el intent-filter para que Supabase reconozca la App como destino de confianza
+          sed -i 's|</activity>|<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter></activity>|g' $FILE
+
+      - name: Build with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiFinanzas-Icono-Fijo
+          path: android/app/build/outputs/apk/debug/app-debug.apk
