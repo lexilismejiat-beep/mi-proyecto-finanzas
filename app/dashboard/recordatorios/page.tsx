@@ -20,7 +20,7 @@ import { format, differenceInDays, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
 
-// --- COMPONENTE DE FORMULARIO ---
+// --- COMPONENTE DE FORMULARIO MODAL ---
 function ModalRecordatorio({ 
   userCedula, 
   onRefresh, 
@@ -142,14 +142,20 @@ export default function RecordatoriosPage() {
   const [profile, setProfile] = useState<any>(null)
   const [isTestingBot, setIsTestingBot] = useState(false)
 
+  // Función para cargar datos iniciales
   const fetchData = async () => {
     try {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Obtenemos el perfil actualizado (incluyendo el telegram_id)
-      const { data: profileData } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+      // Obtenemos el perfil actualizado con telegram_chat_id
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
+      
       setProfile(profileData)
 
       if (profileData?.cedula) {
@@ -171,66 +177,40 @@ export default function RecordatoriosPage() {
     fetchData() 
   }, [])
 
+  // --- FUNCIÓN DEL BOTÓN TEST (CONECTADA A EDGE FUNCTION) ---
   const handleTestBot = async () => {
-  setIsTestingBot(true); // Para mostrar el cargando en el botón
-
-  try {
-    // 1. Obtenemos el ID de Telegram del perfil actual directamente de la DB
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('telegram_chat_id')
-      .eq('id', user?.id)
-      .single();
-
-    if (profileError || !profile?.telegram_chat_id) {
-      toast.error("No se encontró un ID de Telegram vinculado.");
-      return;
+    if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
+      toast.error("Vincule su ID de Telegram correctamente en el bot primero.")
+      return
     }
 
-    // 2. Llamamos a tu Edge Function
-    // Reemplaza 'nombre-de-tu-funcion' por el nombre que le pusiste en Supabase
-    const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/nombre-de-tu-funcion', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-      },
-      body: JSON.stringify({
-        isManualTest: true,
-        testChatId: profile.telegram_chat_id
+    setIsTestingBot(true)
+    try {
+      // URL de tu Edge Function en Supabase
+      // NOTA: Reemplaza 'telegram-notifier' por el nombre exacto de tu función
+      const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/telegram-notifier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isManualTest: true,
+          testChatId: profile.telegram_chat_id
+        })
       })
-    });
 
-    const result = await response.json();
+      const result = await response.json()
 
-    if (response.ok && result.success) {
-      toast.success("✅ ¡Mensaje de prueba enviado a Telegram!");
-    } else {
-      console.error("Error de la función:", result);
-      toast.error("La función respondió con un error.");
-    }
-  } catch (error) {
-    console.error("Error en la llamada:", error);
-    toast.error("Error de conexión con el servidor.");
-  } finally {
-    setIsTestingBot(false);
-  }
-};
-      const resData = await response.json();
-
-      if (response.ok) {
-        toast.success("¡Mensaje de prueba enviado!");
+      if (result.success) {
+        toast.success("✅ ¡Mensaje de prueba enviado! Revisa tu Telegram.")
       } else {
-        toast.error("Telegram rechazó el mensaje: " + resData.description);
+        toast.error("La función no pudo enviar el mensaje.")
       }
     } catch (error) {
-      console.error(error);
-      toast.error("Error de conexión con la API de Telegram");
+      console.error(error)
+      toast.error("Error al conectar con la Edge Function.")
     } finally {
-      setIsTestingBot(false);
+      setIsTestingBot(false)
     }
-  };
+  }
 
   const handleMarcarComoPagado = async (id: number) => {
     const { error } = await supabase.from("recordatorios").update({ estado: 'completado' }).eq('id', id)
@@ -275,7 +255,7 @@ export default function RecordatoriosPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
-              <p className="text-gray-400 text-sm">Gestiona tus alertas directas de Telegram.</p>
+              <p className="text-gray-400 text-sm">Alertas automáticas vía Telegram.</p>
             </div>
             
             <div className="flex items-center gap-2">
@@ -300,16 +280,16 @@ export default function RecordatoriosPage() {
                     <AlertCircle className="text-orange-500 h-8 w-8" />
                 </div>
                 <div>
-                  <p className="text-xs text-orange-500/80 uppercase font-black tracking-tighter">Total Pendiente Mensual</p>
+                  <p className="text-xs text-orange-500/80 uppercase font-black tracking-tighter">Total Pendiente</p>
                   <p className="text-4xl font-black">{formatCurrency(total)}</p>
                 </div>
               </div>
               <div className="flex gap-4">
-                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
                     <p className="text-xl font-bold">{pending.length}</p>
-                    <p className="text-[10px] text-gray-500 uppercase">Por pagar</p>
+                    <p className="text-[10px] text-gray-500 uppercase">Pendientes</p>
                 </div>
-                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
                     <p className="text-xl font-bold text-emerald-500">{completed.length}</p>
                     <p className="text-[10px] text-gray-500 uppercase">Pagados</p>
                 </div>
@@ -319,12 +299,12 @@ export default function RecordatoriosPage() {
 
           <div className="grid gap-4">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Clock size={14} /> Cronograma de pagos
+                <Clock size={14} /> Calendario de Pagos
             </h2>
             {loading ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div> : 
               pending.length === 0 ? (
                 <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
-                    No tienes pagos pendientes.
+                    No tienes pagos pendientes programados.
                 </div>
               ) : (
                 pending.map(r => {
