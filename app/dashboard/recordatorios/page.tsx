@@ -188,14 +188,17 @@ export default function RecordatoriosPage() {
     try {
       // URL de tu Edge Function en Supabase
       // NOTA: Reemplaza 'telegram-notifier' por el nombre exacto de tu función
-      const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/telegram-notifier', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isManualTest: true,
-          testChatId: profile.telegram_chat_id
-        })
-      })
+    // Dentro de RecordatoriosPage.tsx -> handleTestBot
+const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/rapid-handler', {
+  method: 'POST',
+  headers: { 
+    'Content-Type': 'application/json' 
+  },
+  body: JSON.stringify({
+    isManualTest: true,
+    testChatId: profile.telegram_chat_id
+  })
+})
 
       const result = await response.json()
 
