@@ -179,41 +179,49 @@ export default function RecordatoriosPage() {
 
   // --- FUNCIÓN DEL BOTÓN TEST (CONECTADA A EDGE FUNCTION) ---
   const handleTestBot = async () => {
-    if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
-      toast.error("Vincule su ID de Telegram correctamente en el bot primero.")
-      return
-    }
-
-    setIsTestingBot(true)
-    try {
-      // URL de tu Edge Function en Supabase
-      // NOTA: Reemplaza 'telegram-notifier' por el nombre exacto de tu función
-    // Dentro de RecordatoriosPage.tsx -> handleTestBot
-const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/rapid-handler', {
-  method: 'POST',
-  headers: { 
-    'Content-Type': 'application/json' 
-  },
-  body: JSON.stringify({
-    isManualTest: true,
-    testChatId: profile.telegram_chat_id
-  })
-})
-
-      const result = await response.json()
-
-      if (result.success) {
-        toast.success("✅ ¡Mensaje de prueba enviado! Revisa tu Telegram.")
-      } else {
-        toast.error("La función no pudo enviar el mensaje.")
-      }
-    } catch (error) {
-      console.error(error)
-      toast.error("Error al conectar con la Edge Function.")
-    } finally {
-      setIsTestingBot(false)
-    }
+  // 1. Verificación básica del Chat ID
+  if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
+    toast.error("Vincule su ID de Telegram numérico en su perfil.");
+    return;
   }
+
+  setIsTestingBot(true);
+  try {
+    // 2. Llamada a la Edge Function
+    const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/rapid-handler', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        isManualTest: true,
+        testChatId: profile.telegram_chat_id
+      })
+    });
+
+    // 3. Manejo de la respuesta
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Respuesta de error:", errorText);
+        throw new Error("Error en la respuesta del servidor");
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      toast.success("✅ ¡Mensaje enviado! Revisa tu Telegram.");
+    } else {
+      console.error("Detalles de Telegram:", result.details);
+      toast.error("Telegram rechazó el mensaje. ¿Iniciaste el bot?");
+    }
+  } catch (error) {
+    console.error("Error en la petición:", error);
+    toast.error("Error de conexión. Revisa los permisos de CORS en la función.");
+  } finally {
+    setIsTestingBot(false);
+  }
+};
+  
 
   const handleMarcarComoPagado = async (id: number) => {
     const { error } = await supabase.from("recordatorios").update({ estado: 'completado' }).eq('id', id)
