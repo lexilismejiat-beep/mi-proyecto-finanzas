@@ -184,8 +184,8 @@ export default function RecordatoriosPage() {
 
     setIsTestingBot(true);
     try {
-      // Usamos GET para evitar el bloqueo de CORS que vimos en los logs
-      const url = `https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/rapid-handler?t=${Date.now()}`;
+     // LA URL CORRECTA NO LLEVA ".functions" ANTES DE SUPABASE
+const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?t=${Date.now()}`;
       
       const response = await fetch(url, {
         method: 'GET',
