@@ -172,29 +172,51 @@ export default function RecordatoriosPage() {
   }, [])
 
   const handleTestBot = async () => {
-    // 1. Verificamos el ID que viene de la base de datos
-    const MI_CHAT_ID = profile?.telegram_id; 
-    const TELEGRAM_TOKEN = "8662913172:AAHpJ0i59-VjjlzLi8_tpdFlIonhNTdropQ";
-    
-    if (!MI_CHAT_ID) {
-      toast.error("No tienes un Telegram vinculado. Ve al bot y vincula tu cédula primero.");
+  setIsTestingBot(true); // Para mostrar el cargando en el botón
+
+  try {
+    // 1. Obtenemos el ID de Telegram del perfil actual directamente de la DB
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('telegram_chat_id')
+      .eq('id', user?.id)
+      .single();
+
+    if (profileError || !profile?.telegram_chat_id) {
+      toast.error("No se encontró un ID de Telegram vinculado.");
       return;
     }
 
-    setIsTestingBot(true);
-    try {
-      const message = `🔔 ¡Hola ${profile?.full_name || 'Usuario'}! Tu vinculación con la App de Finanzas es correcta. Recibirás tus alertas aquí.`;
-      
-      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: MI_CHAT_ID,
-          text: message,
-          parse_mode: "Markdown"
-        })
-      });
+    // 2. Llamamos a tu Edge Function
+    // Reemplaza 'nombre-de-tu-funcion' por el nombre que le pusiste en Supabase
+    const response = await fetch('https://rdyaeslcznsynfgowutw.functions.supabase.co/v1/nombre-de-tu-funcion', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+      },
+      body: JSON.stringify({
+        isManualTest: true,
+        testChatId: profile.telegram_chat_id
+      })
+    });
 
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      toast.success("✅ ¡Mensaje de prueba enviado a Telegram!");
+    } else {
+      console.error("Error de la función:", result);
+      toast.error("La función respondió con un error.");
+    }
+  } catch (error) {
+    console.error("Error en la llamada:", error);
+    toast.error("Error de conexión con el servidor.");
+  } finally {
+    setIsTestingBot(false);
+  }
+};
       const resData = await response.json();
 
       if (response.ok) {
