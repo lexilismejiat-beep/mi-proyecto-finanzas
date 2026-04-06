@@ -148,6 +148,7 @@ export default function RecordatoriosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Obtenemos el perfil actualizado (incluyendo el telegram_id)
       const { data: profileData } = await supabase.from("profiles").select("*").eq("id", user.id).single()
       setProfile(profileData)
 
@@ -159,48 +160,56 @@ export default function RecordatoriosPage() {
           .order("fecha_vencimiento", { ascending: true })
         if (data) setReminders(data)
       }
-    } catch (e) { console.error(e) } finally { setLoading(false) }
-  }
-
-  useEffect(() => { fetchData() }, [])
-
- const handleTestBot = async () => {
-  // 1. En lugar de un texto manual, sacamos el ID que ya está en el perfil
-  const MI_CHAT_ID = profile?.telegram_id; // <--- Cambia esto
-  const TELEGRAM_TOKEN = "8662913172:AAHpJ0i59-VjjlzLi8_tpdFlIonhNTdropQ";
-  
-  // 2. Verificamos si realmente hay un ID vinculado
-  if (!MI_CHAT_ID) {
-    toast.error("No tienes un Telegram vinculado. ¡Haz la vinculación primero!");
-    return;
-  }
-
-  setIsTestingBot(true);
-  try {
-    const message = `🔔 ¡Hola ${profile?.full_name || 'Usuario'}! Tu vinculación es exitosa. Recibirás tus recordatorios aquí.`;
-    
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: MI_CHAT_ID, // Usa el ID de la base de datos
-        text: message,
-        parse_mode: "Markdown"
-      })
-    });
-
-    if (response.ok) {
-      toast.success("¡Mensaje de prueba enviado!");
-    } else {
-      const errorData = await response.json();
-      toast.error("Telegram dice: " + errorData.description);
+    } catch (e) { 
+      console.error(e) 
+    } finally { 
+      setLoading(false) 
     }
-  } catch (error) {
-    toast.error("Error de conexión con Telegram");
-  } finally {
-    setIsTestingBot(false);
   }
-};
+
+  useEffect(() => { 
+    fetchData() 
+  }, [])
+
+  const handleTestBot = async () => {
+    // 1. Verificamos el ID que viene de la base de datos
+    const MI_CHAT_ID = profile?.telegram_id; 
+    const TELEGRAM_TOKEN = "8662913172:AAHpJ0i59-VjjlzLi8_tpdFlIonhNTdropQ";
+    
+    if (!MI_CHAT_ID) {
+      toast.error("No tienes un Telegram vinculado. Ve al bot y vincula tu cédula primero.");
+      return;
+    }
+
+    setIsTestingBot(true);
+    try {
+      const message = `🔔 ¡Hola ${profile?.full_name || 'Usuario'}! Tu vinculación con la App de Finanzas es correcta. Recibirás tus alertas aquí.`;
+      
+      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: MI_CHAT_ID,
+          text: message,
+          parse_mode: "Markdown"
+        })
+      });
+
+      const resData = await response.json();
+
+      if (response.ok) {
+        toast.success("¡Mensaje de prueba enviado!");
+      } else {
+        toast.error("Telegram rechazó el mensaje: " + resData.description);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Error de conexión con la API de Telegram");
+    } finally {
+      setIsTestingBot(false);
+    }
+  };
+
   const handleMarcarComoPagado = async (id: number) => {
     const { error } = await supabase.from("recordatorios").update({ estado: 'completado' }).eq('id', id)
     if (error) toast.error("Error al actualizar")
