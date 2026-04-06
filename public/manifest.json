@@ -1,0 +1,21 @@
+{
+  "name": "Mis Finanzas Dashboard",
+  "short_name": "Mis Finanzas",
+  "description": "Gestión financiera y recordatorios automáticos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
