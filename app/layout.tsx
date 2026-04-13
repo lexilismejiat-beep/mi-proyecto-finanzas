@@ -6,6 +6,7 @@ import {
 } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+import CapacitorAuthHandler from '@/components/CapacitorAuthHandler'
 
 // --- CONFIGURACIÓN DE FUENTES ---
 const inter = Inter({ subsets: ["latin"], variable: '--font-inter' })
@@ -24,16 +25,16 @@ const quicksand = Quicksand({ subsets: ["latin"], variable: '--font-quicksand' }
 const josefinSans = Josefin_Sans({ subsets: ["latin"], variable: '--font-josefin' })
 const comfortaa = Comfortaa({ subsets: ["latin"], variable: '--font-comfortaa' })
 
-// --- METADATOS ACTUALIZADOS ---
+// --- METADATOS ---
 export const metadata: Metadata = {
   title: 'Mis Finanzas - Dashboard',
   description: 'Gestiona tus finanzas personales de manera inteligente con alertas de Telegram',
   generator: 'v0.app',
-  manifest: '/manifest.json', // Esencial para que se descargue como App con tu icono
+  manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico', // El archivo de la campana financiera que subiste a /public
+    icon: '/favicon.ico',
     shortcut: '/favicon.ico',
-    apple: '/favicon.ico', // Usamos el mismo para dispositivos Apple por simplicidad
+    apple: '/favicon.ico',
   },
 }
 
@@ -45,27 +46,19 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <head>
-        {/* Color de la barra superior en móviles para que combine con tu diseño oscuro */}
         <meta name="theme-color" content="#0a0a0a" />
       </head>
       <body className={`
-        ${inter.variable} 
-        ${roboto.variable} 
-        ${openSans.variable} 
-        ${lato.variable} 
-        ${montserrat.variable} 
-        ${poppins.variable} 
-        ${raleway.variable} 
-        ${nunito.variable} 
-        ${playfairDisplay.variable} 
-        ${merriweather.variable} 
-        ${sourceSans.variable} 
-        ${ubuntu.variable} 
-        ${quicksand.variable} 
-        ${josefinSans.variable} 
-        ${comfortaa.variable} 
+        ${inter.variable} ${roboto.variable} ${openSans.variable} 
+        ${lato.variable} ${montserrat.variable} ${poppins.variable} 
+        ${raleway.variable} ${nunito.variable} ${playfairDisplay.variable} 
+        ${merriweather.variable} ${sourceSans.variable} ${ubuntu.variable} 
+        ${quicksand.variable} ${josefinSans.variable} ${comfortaa.variable} 
         font-sans antialiased
       `}>
+        {/* Este componente maneja el regreso de Google en la APK */}
+        <CapacitorAuthHandler />
+        
         {children}
         <Analytics />
       </body>
