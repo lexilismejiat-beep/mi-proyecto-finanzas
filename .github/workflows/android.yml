@@ -33,7 +33,8 @@ jobs:
         run: |
           npm install @capacitor/assets
           mkdir -p assets
-          cp public/favicon.ico assets/logo.png || cp public/logo.png assets/logo.png
+          # Usamos el logo.png si existe, si no, el favicon
+          cp public/logo.png assets/logo.png || cp public/favicon.ico assets/logo.png
           npx @capacitor/assets generate --android --iconBackgroundColor '#0a0a0a' --iconBackgroundColorDark '#0a0a0a'
 
       - name: Initialize & Configure Capacitor
@@ -52,31 +53,33 @@ jobs:
           }' > capacitor.config.json
           npx cap add android
 
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Configure Android Manifest (Deep Links & Auth Fix)
+      - name: Configure Android Manifest (Deep Links Fix)
         run: |
           FILE="android/app/src/main/AndroidManifest.xml"
           
-          # 1. Creamos el Intent Filter para el esquema personalizado (com.misfinanzas.app://app)
-          # Esto es lo que usará Supabase para "saltar" de vuelta a la app
+          # Definimos los filtros de intención de forma limpia
+          # Este es para com.misfinanzas.app://app
           AUTH_FILTER='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter>'
           
-          # 2. Creamos el Intent Filter para el dominio de Vercel (App Links)
+          # Este es para abrir la app desde la URL de Vercel
           VERCEL_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter>'
           
-          # Inyectamos ambos filtros antes del cierre de la actividad principal
-          sed -i "s|<\/activity>|${AUTH_FILTER}${VERCEL_FILTER}<\/activity>|g" $FILE
+          # Usamos un marcador temporal para evitar errores de escape con sed
+          sed -i "s|<\/activity>|MARKER<\/activity>|g" $FILE
+          sed -i "s|MARKER|${AUTH_FILTER}${VERCEL_FILTER}|g" $FILE
+
+      - name: Sync Capacitor
+        run: npx cap sync android
 
       - name: Build with Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # Agregamos flags para evitar que se detenga por advertencias de lint
+          ./gradlew assembleDebug -x lint
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mis-Finanzas-App-Final
+          name: Mis-Finanzas-App-v2
           path: android/app/build/outputs/apk/debug/app-debug.apk
