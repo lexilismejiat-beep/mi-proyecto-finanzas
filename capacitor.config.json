@@ -9,7 +9,7 @@
   "plugins": {
     "GoogleAuth": {
       "scopes": ["profile", "email"],
-      "serverClientId": "972030916699-0kbt0vum96fe60qpupqdmfaj9juq1qan.apps.googleusercontent.com",
+      "serverClientId": "972030916699-k3gmk7alkv1ua6h66oohmhlvu21qstq4.apps.googleusercontent.com",
       "forceCodeForRefreshToken": true
     }
   }
