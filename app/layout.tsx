@@ -1,4 +1,4 @@
-
+import type { Metadata } from 'next'
 import { 
   Inter, Roboto, Open_Sans, Lato, Montserrat, Poppins, 
   Raleway, Nunito, Playfair_Display, Merriweather, 
