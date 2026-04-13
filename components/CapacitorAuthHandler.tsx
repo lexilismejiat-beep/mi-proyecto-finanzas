@@ -3,41 +3,41 @@
 import { useEffect } from "react"
 import { App } from "@capacitor/app"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
 
 export default function CapacitorAuthHandler() {
   const supabase = createClient()
-  const router = useRouter()
 
   useEffect(() => {
     const handleAuth = async (urlStr: string) => {
       if (!urlStr) return
       
       const url = new URL(urlStr)
-      // Buscamos tokens tanto en el hash (#) como en los parámetros (?)
+      // Extraemos tokens del hash (#) o de la búsqueda (?)
       const params = new URLSearchParams(url.hash.substring(1) || url.search)
       const accessToken = params.get("access_token")
       const refreshToken = params.get("refresh_token")
 
       if (accessToken && refreshToken) {
+        // Establecemos la sesión en Supabase
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         })
 
         if (!error && data.session) {
-          router.push("/dashboard")
-          setTimeout(() => router.refresh(), 500)
+          // Usamos window.location para forzar el refresco de la sesión 
+          // y que el AuthWrapper detecte el cambio de inmediato.
+          window.location.href = "/dashboard"
         }
       }
     }
 
-    // Caso A: La app ya estaba abierta en segundo plano
+    // Escucha si la app vuelve del navegador (App ya abierta)
     const listener = App.addListener("appUrlOpen", (event) => {
       handleAuth(event.url)
     })
 
-    // Caso B: La app estaba cerrada y se abrió con la URL de Google
+    // Revisa si la app se inició directamente desde el enlace (App cerrada)
     const checkInitialUrl = async () => {
       const result = await App.getLaunchUrl()
       if (result?.url) {
@@ -50,7 +50,7 @@ export default function CapacitorAuthHandler() {
     return () => {
       listener.then(l => l.remove())
     }
-  }, [supabase, router])
+  }, [supabase])
 
   return null
 }
