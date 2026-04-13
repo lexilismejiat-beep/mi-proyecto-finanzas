@@ -21,7 +21,9 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install --no-package-lock --legacy-peer-deps
+        run: |
+          npm install --no-package-lock --legacy-peer-deps
+          npm install @codetrix-studio/capacitor-google-auth
 
       - name: Build Next.js
         env:
@@ -29,44 +31,19 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Generate Android Assets
+      # --- PASO CRÍTICO: EXTRAER SHA-1 ---
+      # Esto imprimirá la clave en los logs de GitHub Actions
+      - name: Extract SHA1 for Google Cloud
         run: |
-          npm install @capacitor/assets
-          mkdir -p assets
-          # Usamos el logo.png si existe, si no, el favicon
-          cp public/logo.png assets/logo.png || cp public/favicon.ico assets/logo.png
-          npx @capacitor/assets generate --android --iconBackgroundColor '#0a0a0a' --iconBackgroundColorDark '#0a0a0a'
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "cn=Unknown, ou=Unknown, o=Unknown, c=Unknown" || true
+          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
 
       - name: Initialize & Configure Capacitor
         run: |
-          echo '{
-            "appId": "com.misfinanzas.app",
-            "appName": "Mis Finanzas",
-            "webDir": "out",
-            "server": {
-              "url": "https://mis-finanzas-kappa.vercel.app",
-              "allowNavigation": [
-                "mis-finanzas-kappa.vercel.app",
-                "*.supabase.co"
-              ]
-            }
-          }' > capacitor.config.json
-          npx cap add android
-
-      - name: Configure Android Manifest (Deep Links Fix)
-        run: |
-          FILE="android/app/src/main/AndroidManifest.xml"
-          
-          # Definimos los filtros de intención de forma limpia
-          # Este es para com.misfinanzas.app://app
-          AUTH_FILTER='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter>'
-          
-          # Este es para abrir la app desde la URL de Vercel
-          VERCEL_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter>'
-          
-          # Usamos un marcador temporal para evitar errores de escape con sed
-          sed -i "s|<\/activity>|MARKER<\/activity>|g" $FILE
-          sed -i "s|MARKER|${AUTH_FILTER}${VERCEL_FILTER}|g" $FILE
+          # Solo añadimos la plataforma, NO sobrescribimos el capacitor.config.json 
+          # porque ya lo tienes bien configurado en tu repo de GitHub.
+          npx cap add android || true
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -75,7 +52,6 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          # Agregamos flags para evitar que se detenga por advertencias de lint
           ./gradlew assembleDebug -x lint
 
       - name: Upload APK
