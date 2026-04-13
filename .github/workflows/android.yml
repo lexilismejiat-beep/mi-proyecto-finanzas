@@ -1,61 +1,85 @@
 name: Build Android APK
 on:
-  push:
-    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Install dependencies
-        run: |
-          npm install --no-package-lock --legacy-peer-deps
-          npm install @codetrix-studio/capacitor-google-auth
+      - name: Install dependencies
+        run: npm install --no-package-lock --legacy-peer-deps
 
-      - name: Build Next.js
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-        run: npm run build
+      - name: Build Next.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run build
 
-      # --- PASO CRÍTICO: EXTRAER SHA-1 ---
-      # Esto imprimirá la clave en los logs de GitHub Actions
-      - name: Extract SHA1 for Google Cloud
-        run: |
-          mkdir -p ~/.android
-          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "cn=Unknown, ou=Unknown, o=Unknown, c=Unknown" || true
-          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
+      - name: Generate Android Assets
+        run: |
+          npm install @capacitor/assets
+          mkdir -p assets
+          # Usamos el logo.png si existe, si no, el favicon
+          cp public/logo.png assets/logo.png || cp public/favicon.ico assets/logo.png
+          npx @capacitor/assets generate --android --iconBackgroundColor '#0a0a0a' --iconBackgroundColorDark '#0a0a0a'
 
-      - name: Initialize & Configure Capacitor
-        run: |
-          # Solo añadimos la plataforma, NO sobrescribimos el capacitor.config.json 
-          # porque ya lo tienes bien configurado en tu repo de GitHub.
-          npx cap add android || true
+      - name: Initialize & Configure Capacitor
+        run: |
+          echo '{
+            "appId": "com.misfinanzas.app",
+            "appName": "Mis Finanzas",
+            "webDir": "out",
+            "server": {
+              "url": "https://mis-finanzas-kappa.vercel.app",
+              "allowNavigation": [
+                "mis-finanzas-kappa.vercel.app",
+                "*.supabase.co"
+              ]
+            }
+          }' > capacitor.config.json
+          npx cap add android
 
-      - name: Sync Capacitor
-        run: npx cap sync android
+      - name: Configure Android Manifest (Deep Links Fix)
+        run: |
+          FILE="android/app/src/main/AndroidManifest.xml"
+          
+          # Definimos los filtros de intención de forma limpia
+          # Este es para com.misfinanzas.app://app
+          AUTH_FILTER='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter>'
+          
+          # Este es para abrir la app desde la URL de Vercel
+          VERCEL_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter>'
+          
+          # Usamos un marcador temporal para evitar errores de escape con sed
+          sed -i "s|<\/activity>|MARKER<\/activity>|g" $FILE
+          sed -i "s|MARKER|${AUTH_FILTER}${VERCEL_FILTER}|g" $FILE
 
-      - name: Build with Gradle
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug -x lint
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Mis-Finanzas-App-v2
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Build with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          # Agregamos flags para evitar que se detenga por advertencias de lint
+          ./gradlew assembleDebug -x lint
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mis-Finanzas-App-v2
+          path: android/app/build/outputs/apk/debug/app-debug.apk
