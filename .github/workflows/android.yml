@@ -29,18 +29,15 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Generate Android Assets (Icono Personalizado)
+      - name: Generate Android Assets
         run: |
           npm install @capacitor/assets
           mkdir -p assets
-          # Usamos tu favicon como base para el icono del móvil
-          cp public/favicon.ico assets/logo.png
-          # Generamos los iconos con fondo oscuro para que no aparezca el logo de Capacitor
+          cp public/favicon.ico assets/logo.png || cp public/logo.png assets/logo.png
           npx @capacitor/assets generate --android --iconBackgroundColor '#0a0a0a' --iconBackgroundColorDark '#0a0a0a'
 
       - name: Initialize & Configure Capacitor
         run: |
-          # Configuramos la URL de Vercel para que la sesión se mantenga dentro de la App
           echo '{
             "appId": "com.misfinanzas.app",
             "appName": "Mis Finanzas",
@@ -58,11 +55,19 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Configure Android Manifest (Deep Links)
+      - name: Configure Android Manifest (Deep Links & Auth Fix)
         run: |
           FILE="android/app/src/main/AndroidManifest.xml"
-          # El parámetro autoVerify="true" es lo que permite que el login de Google te devuelva a la App
-          sed -i 's|</activity>|<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter></activity>|g' $FILE
+          
+          # 1. Creamos el Intent Filter para el esquema personalizado (com.misfinanzas.app://app)
+          # Esto es lo que usará Supabase para "saltar" de vuelta a la app
+          AUTH_FILTER='<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="com.misfinanzas.app" android:host="app" /></intent-filter>'
+          
+          # 2. Creamos el Intent Filter para el dominio de Vercel (App Links)
+          VERCEL_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="https" android:host="mis-finanzas-kappa.vercel.app" /></intent-filter>'
+          
+          # Inyectamos ambos filtros antes del cierre de la actividad principal
+          sed -i "s|<\/activity>|${AUTH_FILTER}${VERCEL_FILTER}<\/activity>|g" $FILE
 
       - name: Build with Gradle
         run: |
