@@ -32,17 +32,24 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const publicPaths = ["/auth/login", "/auth/callback", "/auth/error"]
 
   useEffect(() => {
+    // 1. Verificación inicial de sesión
     checkAuth()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. ESCUCHA DE CAMBIOS: Vital para el APK. 
+    // Cuando CapacitorAuthHandler hace 'setSession', este listener lo detecta.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user)
-        fetchProfile(session.user.id)
+        await fetchProfile(session.user.id)
+        setIsLoading(false) // Desbloquea la pantalla de carga inmediatamente
       } else {
         setUser(null)
         setProfile(null)
         if (!publicPaths.includes(pathname)) {
+          setIsLoading(false)
           router.push("/auth/login")
+        } else {
+          setIsLoading(false)
         }
       }
     })
@@ -55,15 +62,13 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const checkAuth = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      
       if (!user) {
-        setIsLoading(false)
         if (!publicPaths.includes(pathname)) {
           router.push("/auth/login")
         }
+        setIsLoading(false)
         return
       }
-
       setUser(user)
       await fetchProfile(user.id)
     } catch (error) {
@@ -82,11 +87,10 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
 
       setProfile(profile)
 
-      // Redirect based on registration status
       if (profile && !profile.registration_complete && pathname !== "/registro") {
         router.push("/registro")
       } else if (profile?.registration_complete && pathname === "/registro") {
-        router.push("/")
+        router.push("/dashboard")
       }
     } catch (error) {
       console.error("Error fetching profile:", error)
@@ -95,29 +99,21 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
     }
   }
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 dark:text-gray-400">Cargando...</p>
+          <p className="text-gray-600 dark:text-gray-400">Cargando aplicación...</p>
         </div>
       </div>
     )
   }
 
-  // Public pages don't need auth wrapper content
-  if (publicPaths.includes(pathname)) {
+  if (publicPaths.includes(pathname) || pathname === "/registro") {
     return <>{children}</>
   }
 
-  // Registration page
-  if (pathname === "/registro") {
-    return <>{children}</>
-  }
-
-  // Protected pages need full wrapper with theme
   return (
     <ThemeSettingsProvider>
       <ThemedContent user={user} profile={profile}>
@@ -127,42 +123,14 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   )
 }
 
-function ThemedContent({ 
-  children, 
-  user,
-  profile 
-}: { 
-  children: ReactNode
-  user: User | null
-  profile: UserProfile | null
-}) {
+function ThemedContent({ children, user, profile }: { children: ReactNode, user: User | null, profile: UserProfile | null }) {
   const { theme } = useThemeSettings()
-
   return (
-    <div 
-      className="min-h-screen relative"
-      style={{
-        backgroundColor: theme.background_color,
-        color: theme.text_color,
-      }}
-    >
-      {/* Background Image */}
+    <div className="min-h-screen relative" style={{ backgroundColor: theme.background_color, color: theme.text_color }}>
       {theme.background_image_url && (
-        <div 
-          className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: `url(${theme.background_image_url})`,
-            opacity: theme.background_opacity / 100,
-          }}
-        />
+        <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${theme.background_image_url})`, opacity: theme.background_opacity / 100 }} />
       )}
-      
-      {/* Content */}
-      <div className="relative z-10">
-        {children}
-      </div>
-
-      {/* Theme Customizer Button */}
+      <div className="relative z-10">{children}</div>
       <ThemeCustomizer />
     </div>
   )
