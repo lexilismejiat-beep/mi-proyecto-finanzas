@@ -10,28 +10,39 @@ export default function CapacitorAuthHandler() {
   const router = useRouter()
 
   useEffect(() => {
-    // Escuchamos cuando la app se abre vía URL (Deep Link)
-    App.addListener("appUrlOpen", async (event: any) => {
-      // Extraemos la parte de la URL después del # (donde viene el access_token)
-      const url = new URL(event.url)
-      const hash = url.hash
-      
-      if (hash) {
-        // Supabase detecta automáticamente el hash en la URL si lo procesamos
-        const { error } = await supabase.auth.getSession()
+    // 1. Manejar el evento cuando la App se abre desde el navegador (Google Login)
+    const setupListener = async () => {
+      await App.addListener("appUrlOpen", async (event: any) => {
+        // Obtenemos la URL completa que envió Google/Supabase
+        const url = new URL(event.url)
         
-        if (!error) {
-          // Si todo está bien, mandamos al usuario al dashboard
-          router.push("/dashboard")
-          router.refresh()
+        // Supabase pone los tokens después del '#'
+        const hash = url.hash 
+        
+        if (hash) {
+          // Forzamos a Supabase a que tome la sesión de ese hash
+          const { data, error } = await supabase.auth.setSession({
+            access_token: new URLSearchParams(hash.substring(1)).get("access_token") || "",
+            refresh_token: new URLSearchParams(hash.substring(1)).get("refresh_token") || "",
+          })
+
+          if (!error && data.session) {
+            console.log("Sesión establecida correctamente")
+            router.push("/dashboard")
+            router.refresh()
+          } else {
+            console.error("Error al establecer sesión:", error?.message)
+          }
         }
-      }
-    })
+      })
+    }
+
+    setupListener()
 
     return () => {
       App.removeAllListeners()
     }
   }, [supabase, router])
 
-  return null // Este componente no renderiza nada visualmente
+  return null
 }
