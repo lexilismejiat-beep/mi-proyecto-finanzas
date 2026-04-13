@@ -12,45 +12,32 @@ export default function CapacitorAuthHandler() {
       if (!urlStr) return
       
       const url = new URL(urlStr)
-      // Extraemos tokens del hash (#) o de la búsqueda (?)
-      const params = new URLSearchParams(url.hash.substring(1) || url.search)
+      // Google manda los tokens después del '#'
+      const params = new URLSearchParams(url.hash.substring(1))
       const accessToken = params.get("access_token")
       const refreshToken = params.get("refresh_token")
 
       if (accessToken && refreshToken) {
-        // Establecemos la sesión en Supabase
-        const { data, error } = await supabase.auth.setSession({
+        const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         })
 
-        if (!error && data.session) {
-          // Usamos window.location para forzar el refresco de la sesión 
-          // y que el AuthWrapper detecte el cambio de inmediato.
+        if (!error) {
+          // Forzamos el salto al dashboard
           window.location.href = "/dashboard"
         }
       }
     }
 
-    // Escucha si la app vuelve del navegador (App ya abierta)
-    const listener = App.addListener("appUrlOpen", (event) => {
-      handleAuth(event.url)
-    })
+    // Escucha cuando la app vuelve del navegador
+    const listener = App.addListener("appUrlOpen", (data) => handleAuth(data.url))
 
-    // Revisa si la app se inició directamente desde el enlace (App cerrada)
-    const checkInitialUrl = async () => {
-      const result = await App.getLaunchUrl()
-      if (result?.url) {
-        handleAuth(result.url)
-      }
-    }
+    // Revisa si la app se abrió estando cerrada por el link
+    App.getLaunchUrl().then(val => { if (val?.url) handleAuth(val.url) })
 
-    checkInitialUrl()
-
-    return () => {
-      listener.then(l => l.remove())
-    }
-  }, [supabase])
+    return () => { listener.then(l => l.remove()) }
+  }, [])
 
   return null
 }
