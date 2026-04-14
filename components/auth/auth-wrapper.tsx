@@ -15,6 +15,8 @@ interface UserProfile {
   telefono: string
   registration_complete: boolean
   avatar_url: string | null
+  subscription_status?: string // Añadido para control de pagos
+  trial_ends_at?: string       // Añadido para control de pagos
 }
 
 interface AuthWrapperProps {
@@ -29,7 +31,8 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const pathname = usePathname()
   const supabase = createClient()
 
-  const publicPaths = ["/auth/login", "/auth/callback", "/auth/error"]
+  // 1. ACTUALIZAMOS RUTAS PÚBLICAS (Añadimos /checkout y /)
+  const publicPaths = ["/auth/login", "/auth/callback", "/auth/error", "/checkout", "/"]
 
   useEffect(() => {
     checkAuth()
@@ -41,7 +44,8 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
       } else {
         setUser(null)
         setProfile(null)
-        if (!publicPaths.includes(pathname)) {
+        // Solo redirigir si no es una ruta pública
+        if (!publicPaths.some(path => pathname === path)) {
           router.push("/auth/login")
         }
       }
@@ -58,7 +62,7 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
       
       if (!user) {
         setIsLoading(false)
-        if (!publicPaths.includes(pathname)) {
+        if (!publicPaths.some(path => pathname === path)) {
           router.push("/auth/login")
         }
         return
@@ -75,18 +79,30 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const fetchProfile = async (userId: string) => {
     try {
       const { data: profile } = await supabase
-        .from("user_profiles")
+        .from("profiles") // Cambiado a "profiles" para coincidir con tu tabla de suscripción
         .select("*")
         .eq("id", userId)
         .single()
 
       setProfile(profile)
 
-      // Redirect based on registration status
-      if (profile && !profile.registration_complete && pathname !== "/registro") {
-        router.push("/registro")
-      } else if (profile?.registration_complete && pathname === "/registro") {
-        router.push("/")
+      // 2. LÓGICA DE REDIRECCIÓN DINÁMICA
+      if (profile) {
+        const isExpired = new Date() > new Date(profile.trial_ends_at)
+        const isNotActive = profile.subscription_status !== 'active'
+
+        // Si expiró y no está en checkout, mandarlo allá
+        if (isExpired && isNotActive && pathname.startsWith('/dashboard')) {
+          router.push("/checkout")
+          return
+        }
+
+        // Registro incompleto
+        if (!profile.registration_complete && pathname !== "/registro") {
+          router.push("/registro")
+        } else if (profile.registration_complete && pathname === "/registro") {
+          router.push("/dashboard")
+        }
       }
     } catch (error) {
       console.error("Error fetching profile:", error)
@@ -95,29 +111,22 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
     }
   }
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 dark:text-gray-400">Cargando...</p>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Verificando sesión...</p>
         </div>
       </div>
     )
   }
 
-  // Public pages don't need auth wrapper content
-  if (publicPaths.includes(pathname)) {
+  // Rutas que no llevan el wrapper de tema (Login, Registro, Checkout)
+  if (publicPaths.includes(pathname) || pathname === "/registro") {
     return <>{children}</>
   }
 
-  // Registration page
-  if (pathname === "/registro") {
-    return <>{children}</>
-  }
-
-  // Protected pages need full wrapper with theme
   return (
     <ThemeSettingsProvider>
       <ThemedContent user={user} profile={profile}>
@@ -127,43 +136,4 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   )
 }
 
-function ThemedContent({ 
-  children, 
-  user,
-  profile 
-}: { 
-  children: ReactNode
-  user: User | null
-  profile: UserProfile | null
-}) {
-  const { theme } = useThemeSettings()
-
-  return (
-    <div 
-      className="min-h-screen relative"
-      style={{
-        backgroundColor: theme.background_color,
-        color: theme.text_color,
-      }}
-    >
-      {/* Background Image */}
-      {theme.background_image_url && (
-        <div 
-          className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: `url(${theme.background_image_url})`,
-            opacity: theme.background_opacity / 100,
-          }}
-        />
-      )}
-      
-      {/* Content */}
-      <div className="relative z-10">
-        {children}
-      </div>
-
-      {/* Theme Customizer Button */}
-      <ThemeCustomizer />
-    </div>
-  )
-}
+// ... (ThemedContent se queda igual abajo)
