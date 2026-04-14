@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import Script from 'next/script' // Importamos el componente correcto
+import Script from 'next/script'
 
 export default function CheckoutPage() {
   const supabase = createClientComponentClient()
   const [user, setUser] = useState<any>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
     const getUser = async () => {
@@ -15,48 +16,47 @@ export default function CheckoutPage() {
     getUser()
   }, [supabase])
 
-  const openWompiWidget = () => {
-    if (!user) return alert("Debes estar logueado")
-
+  const openWompi = () => {
+    if (!user) return alert("Inicia sesión primero")
+    
     // @ts-ignore
     const checkout = new WidgetCheckout({
       currency: 'USD',
       amountInCents: 700,
-      reference: user.id,
+      reference: `${user.id}_${Date.now()}`,
       publicKey: process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY,
-      // Usamos window.location.origin para que funcione en local y en vercel automáticamente
-      redirectUrl: `${window.location.origin}/dashboard`, 
+      redirectUrl: `${window.location.origin}/dashboard`,
     })
 
     checkout.open((result: any) => {
-      const transaction = result.transaction
-      if (transaction.status === 'APPROVED') {
-        alert('¡Pago exitoso! Redirigiendo...')
+      if (result.transaction.status === 'APPROVED') {
         window.location.href = '/dashboard'
       }
     })
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      {/* Cargamos el script de Wompi correctamente */}
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
       <Script 
         src="https://checkout.wompi.co/widget.js" 
-        strategy="beforeInteractive" 
+        strategy="afterInteractive"
+        onLoad={() => setIsLoaded(true)}
       />
 
-      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-        <h1 className="text-2xl font-bold mb-4">Tu tiempo de prueba ha terminado</h1>
-        <p className="text-gray-600 mb-6">
-          Para continuar gestionando tus finanzas y acceder a la futura APK, suscríbete por solo **$7 USD** al mes.
+      <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center border border-gray-700">
+        <h1 className="text-3xl font-bold mb-4">Membresía Expirada</h1>
+        <p className="text-gray-400 mb-8">
+          Tu tiempo de prueba ha terminado. Suscríbete por <b>$7 USD</b> para seguir gestionando tus finanzas.
         </p>
 
         <button
-          onClick={openWompiWidget}
-          className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 transition"
+          onClick={openWompi}
+          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-105"
         >
-          Pagar $7 USD con Wompi
+          Pagar Suscripción
         </button>
+        
+        {!isLoaded && <p className="text-xs text-gray-500 mt-4">Cargando pasarela de pago...</p>}
       </div>
     </div>
   )
