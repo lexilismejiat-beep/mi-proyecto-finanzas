@@ -4,14 +4,27 @@ import { useEffect, useState, ReactNode } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { User } from "@supabase/supabase-js"
-import { ThemeSettingsProvider } from "@/lib/theme-context"
+import { ThemeSettingsProvider, useThemeSettings } from "@/lib/theme-context"
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer"
 
-export function AuthWrapper({ children }: { children: ReactNode }) {
+interface UserProfile {
+  id: string
+  nombres: string
+  apellidos: string
+  cedula: string
+  telefono: string
+  registration_complete: boolean
+  avatar_url: string | null
+}
+
+interface AuthWrapperProps {
+  children: ReactNode
+}
+
+export function AuthWrapper({ children }: AuthWrapperProps) {
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<any | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isMounted, setIsMounted] = useState(false) // NUEVO: Para evitar Error #418
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
@@ -19,25 +32,12 @@ export function AuthWrapper({ children }: { children: ReactNode }) {
   const publicPaths = ["/auth/login", "/auth/callback", "/auth/error"]
 
   useEffect(() => {
-    setIsMounted(true) // Marcamos que ya estamos en el navegador
+    checkAuth()
 
-    const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
         setUser(session.user)
-        await fetchProfile(session.user.id)
-      } else if (!publicPaths.includes(pathname)) {
-        router.push("/auth/login")
-      }
-      setIsLoading(false)
-    }
-    
-    initAuth()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        setUser(session.user)
-        await fetchProfile(session.user.id)
+        fetchProfile(session.user.id)
       } else {
         setUser(null)
         setProfile(null)
@@ -45,47 +45,125 @@ export function AuthWrapper({ children }: { children: ReactNode }) {
           router.push("/auth/login")
         }
       }
-      setIsLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [pathname])
+
+  const checkAuth = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        setIsLoading(false)
+        if (!publicPaths.includes(pathname)) {
+          router.push("/auth/login")
+        }
+        return
+      }
+
+      setUser(user)
+      await fetchProfile(user.id)
+    } catch (error) {
+      console.error("Error checking auth:", error)
+      setIsLoading(false)
+    }
+  }
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data } = await supabase.from("user_profiles").select("*").eq("id", userId).single()
-      setProfile(data)
-      if (data && !data.registration_complete && pathname !== "/registro") {
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("id", userId)
+        .single()
+
+      setProfile(profile)
+
+      // Redirect based on registration status
+      if (profile && !profile.registration_complete && pathname !== "/registro") {
         router.push("/registro")
+      } else if (profile?.registration_complete && pathname === "/registro") {
+        router.push("/")
       }
-    } catch (e) { 
-      console.error("Error perfil:", e) 
+    } catch (error) {
+      console.error("Error fetching profile:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // PASO CRÍTICO: Si no ha cargado el cliente, no renderizamos nada pesado
-  if (!isMounted) return <div className="min-h-screen bg-gray-900" />
-
+  // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400">Sincronizando sesión...</p>
+          <p className="text-gray-600 dark:text-gray-400">Cargando...</p>
         </div>
       </div>
     )
   }
 
-  if (publicPaths.includes(pathname) || pathname === "/registro") return <>{children}</>
+  // Public pages don't need auth wrapper content
+  if (publicPaths.includes(pathname)) {
+    return <>{children}</>
+  }
 
+  // Registration page
+  if (pathname === "/registro") {
+    return <>{children}</>
+  }
+
+  // Protected pages need full wrapper with theme
   return (
     <ThemeSettingsProvider>
-      <ThemedContent user={user} profile={profile}>{children}</ThemedContent>
+      <ThemedContent user={user} profile={profile}>
+        {children}
+      </ThemedContent>
     </ThemeSettingsProvider>
   )
 }
 
-// ... Mantén tu función ThemedContent igual abajo
+function ThemedContent({ 
+  children, 
+  user,
+  profile 
+}: { 
+  children: ReactNode
+  user: User | null
+  profile: UserProfile | null
+}) {
+  const { theme } = useThemeSettings()
+
+  return (
+    <div 
+      className="min-h-screen relative"
+      style={{
+        backgroundColor: theme.background_color,
+        color: theme.text_color,
+      }}
+    >
+      {/* Background Image */}
+      {theme.background_image_url && (
+        <div 
+          className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: `url(${theme.background_image_url})`,
+            opacity: theme.background_opacity / 100,
+          }}
+        />
+      )}
+      
+      {/* Content */}
+      <div className="relative z-10">
+        {children}
+      </div>
+
+      {/* Theme Customizer Button */}
+      <ThemeCustomizer />
+    </div>
+  )
+}
