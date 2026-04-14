@@ -3,11 +3,9 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // 1. Refresca la sesión para mantener al usuario logueado
-  // Pasamos la request original para que updateSession maneje las cookies
+  // 1. Refrescar sesión
   const response = await updateSession(request)
 
-  // 2. Creamos cliente de Supabase para leer la base de datos
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -15,25 +13,30 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value)
-          })
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         },
       },
     }
   )
 
-  // Obtenemos al usuario de forma segura
   const { data: { user } } = await supabase.auth.getUser()
+  const { pathname } = request.nextUrl
 
-  // 3. DEFINICIÓN DE RUTAS
-  const isDashboard = request.nextUrl.pathname.startsWith('/dashboard')
-  const isCheckoutPage = request.nextUrl.pathname.startsWith('/checkout')
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api')
+  // --- REGLAS DE ACCESO ---
 
-  // 4. LÓGICA DE BLOQUEO
-  // Solo verificamos si el usuario intenta entrar a una zona protegida (Dashboard)
-  if (user && isDashboard) {
+  // A. EXCEPCIONES: Permitir siempre el checkout y la raíz
+  if (pathname === '/checkout' || pathname === '/') {
+    return response
+  }
+
+  // B. PROTECCIÓN DASHBOARD
+  if (pathname.startsWith('/dashboard')) {
+    // Si no está logueado, mandarlo al inicio (evita 404 de /login)
+    if (!user) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    // Revisar suscripción
     const { data: profile } = await supabase
       .from('profiles')
       .select('subscription_status, trial_ends_at')
@@ -44,12 +47,8 @@ export async function middleware(request: NextRequest) {
       const now = new Date()
       const trialEnd = new Date(profile.trial_ends_at)
       
-      const isExpired = now > trialEnd
-      const isNotActive = profile.subscription_status !== 'active'
-
-      // Si expiró el tiempo y no ha pagado...
-      if (isExpired && isNotActive) {
-        // Redirigimos dinámicamente a /checkout usando la URL actual para no fallar en dominios de Vercel
+      // Si expiró y no es activo, forzar checkout
+      if (now > trialEnd && profile.subscription_status !== 'active') {
         const url = request.nextUrl.clone()
         url.pathname = '/checkout'
         return NextResponse.redirect(url)
@@ -57,25 +56,9 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 5. PROTECCIÓN BÁSICA: Si no hay usuario y trata de entrar al dashboard, al login
-  if (!user && isDashboard) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
   return response
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 }
