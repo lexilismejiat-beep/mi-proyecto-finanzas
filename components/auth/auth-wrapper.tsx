@@ -15,8 +15,8 @@ interface UserProfile {
   telefono: string
   registration_complete: boolean
   avatar_url: string | null
-  subscription_status?: string // Añadido para control de pagos
-  trial_ends_at?: string       // Añadido para control de pagos
+  subscription_status?: string
+  trial_ends_at?: string
 }
 
 interface AuthWrapperProps {
@@ -31,7 +31,6 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const pathname = usePathname()
   const supabase = createClient()
 
-  // 1. ACTUALIZAMOS RUTAS PÚBLICAS (Añadimos /checkout y /)
   const publicPaths = ["/auth/login", "/auth/callback", "/auth/error", "/checkout", "/"]
 
   useEffect(() => {
@@ -44,8 +43,7 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
       } else {
         setUser(null)
         setProfile(null)
-        // Solo redirigir si no es una ruta pública
-        if (!publicPaths.some(path => pathname === path)) {
+        if (!publicPaths.includes(pathname)) {
           router.push("/auth/login")
         }
       }
@@ -59,15 +57,13 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const checkAuth = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      
       if (!user) {
         setIsLoading(false)
-        if (!publicPaths.some(path => pathname === path)) {
+        if (!publicPaths.includes(pathname)) {
           router.push("/auth/login")
         }
         return
       }
-
       setUser(user)
       await fetchProfile(user.id)
     } catch (error) {
@@ -78,29 +74,26 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data: profile } = await supabase
-        .from("profiles") // Cambiado a "profiles" para coincidir con tu tabla de suscripción
+      const { data: profileData } = await supabase
+        .from("profiles")
         .select("*")
         .eq("id", userId)
         .single()
 
-      setProfile(profile)
+      setProfile(profileData)
 
-      // 2. LÓGICA DE REDIRECCIÓN DINÁMICA
-      if (profile) {
-        const isExpired = new Date() > new Date(profile.trial_ends_at)
-        const isNotActive = profile.subscription_status !== 'active'
+      if (profileData) {
+        const isExpired = new Date() > new Date(profileData.trial_ends_at)
+        const isNotActive = profileData.subscription_status !== 'active'
 
-        // Si expiró y no está en checkout, mandarlo allá
         if (isExpired && isNotActive && pathname.startsWith('/dashboard')) {
           router.push("/checkout")
           return
         }
 
-        // Registro incompleto
-        if (!profile.registration_complete && pathname !== "/registro") {
+        if (!profileData.registration_complete && pathname !== "/registro") {
           router.push("/registro")
-        } else if (profile.registration_complete && pathname === "/registro") {
+        } else if (profileData.registration_complete && pathname === "/registro") {
           router.push("/dashboard")
         }
       }
@@ -113,16 +106,12 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 dark:text-gray-400 font-medium">Verificando sesión...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
-  // Rutas que no llevan el wrapper de tema (Login, Registro, Checkout)
   if (publicPaths.includes(pathname) || pathname === "/registro") {
     return <>{children}</>
   }
@@ -136,4 +125,41 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   )
 }
 
-// ... (ThemedContent se queda igual abajo)
+// ESTA ES LA FUNCIÓN QUE FALTABA O DABA ERROR
+function ThemedContent({ 
+  children, 
+  user,
+  profile 
+}: { 
+  children: ReactNode
+  user: User | null
+  profile: UserProfile | null
+}) {
+  const { theme } = useThemeSettings()
+
+  return (
+    <div 
+      className="min-h-screen relative"
+      style={{
+        backgroundColor: theme.background_color,
+        color: theme.text_color,
+      }}
+    >
+      {theme.background_image_url && (
+        <div 
+          className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: `url(${theme.background_image_url})`,
+            opacity: theme.background_opacity / 100,
+          }}
+        />
+      )}
+      
+      <div className="relative z-10">
+        {children}
+      </div>
+
+      <ThemeCustomizer />
+    </div>
+  )
+}
