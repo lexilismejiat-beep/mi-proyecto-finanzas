@@ -10,7 +10,7 @@ import {
   ArrowUpDown,
   PieChart,
   Settings,
-  CreditCard,
+  CreditCard, // Usaremos este para Pagos
   TrendingUp,
   ChevronLeft,
   ChevronRight,
@@ -24,12 +24,14 @@ interface NavItem {
   href: string
 }
 
+// 1. ACTUALIZACIÓN: Añadimos "Suscripción" a la lista de navegación
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: ArrowUpDown, label: "Transacciones", href: "/dashboard/transacciones" },
   { icon: PieChart, label: "Categorías", href: "/dashboard/categorias" },
   { icon: TrendingUp, label: "Reportes", href: "/dashboard/reportes" },
   { icon: Bell, label: "Recordatorios", href: "/dashboard/recordatorios" },
+  { icon: CreditCard, label: "Suscripción", href: "/dashboard/pagos" }, // Nueva ruta
   { icon: Settings, label: "Configuración", href: "/dashboard/configuracion" },
 ]
 
@@ -41,7 +43,6 @@ interface SidebarProps {
   sidebarColor?: string
 }
 
-// Función auxiliar para determinar si un color es claro u oscuro
 function isColorLight(color: string): boolean {
   if (!color) return false
   const hex = color.replace("#", "")
@@ -62,19 +63,17 @@ export function Sidebar({
   const pathname = usePathname()
   const supabase = createClientComponentClient()
   
-  // Estados locales
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [dbSidebarColor, setDbSidebarColor] = useState(propColor)
   
   const collapsed = controlledCollapsed ?? internalCollapsed
   const setCollapsed = onCollapsedChange ?? setInternalCollapsed
 
-  // 1. Efecto para cargar el color desde Supabase al montar el componente
   useEffect(() => {
     const fetchSidebarSettings = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('profiles')
           .select('sidebar_color')
           .eq('id', session.user.id)
@@ -88,7 +87,6 @@ export function Sidebar({
     fetchSidebarSettings()
   }, [supabase])
 
-  // 2. Lógica de colores dinámica
   const activeColor = dbSidebarColor
   const isLight = isColorLight(activeColor)
   
@@ -100,7 +98,6 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile Overlay */}
       {mobileOpen && (
         <div 
           className="fixed inset-0 z-30 bg-background/80 backdrop-blur-sm lg:hidden"
@@ -120,7 +117,6 @@ export function Sidebar({
           borderRight: `1px solid ${borderColor}`
         }}
       >
-        {/* Logo */}
         <div 
           className="flex h-16 items-center gap-3 px-4"
           style={{ borderBottom: `1px solid ${borderColor}` }}
@@ -135,7 +131,6 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 space-y-1 p-3">
           {navItems.map((item) => {
             const isActive = pathname === item.href
@@ -165,11 +160,10 @@ export function Sidebar({
                 <item.icon className="h-5 w-5 shrink-0" />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
-            )
+            );
           })}
         </nav>
 
-        {/* Collapse Toggle */}
         <div 
           className="p-3"
           style={{ borderTop: `1px solid ${borderColor}` }}
