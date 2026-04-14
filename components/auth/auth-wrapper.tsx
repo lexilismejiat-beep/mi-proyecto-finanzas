@@ -9,21 +9,12 @@ import { ThemeCustomizer } from "@/components/dashboard/theme-customizer"
 
 interface UserProfile {
   id: string
-  nombres: string
-  apellidos: string
-  cedula: string
-  telefono: string
   registration_complete: boolean
-  avatar_url: string | null
   subscription_status?: string
   trial_ends_at?: string
 }
 
-interface AuthWrapperProps {
-  children: ReactNode
-}
-
-export function AuthWrapper({ children }: AuthWrapperProps) {
+export function AuthWrapper({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -34,71 +25,73 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
   const publicPaths = ["/auth/login", "/auth/callback", "/auth/error", "/checkout", "/"]
 
   useEffect(() => {
-    checkAuth()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user)
-        fetchProfile(session.user.id)
+        await fetchProfile(session.user.id)
       } else {
         setUser(null)
         setProfile(null)
         if (!publicPaths.includes(pathname)) {
           router.push("/auth/login")
         }
+        setIsLoading(false)
       }
     })
 
-    return () => {
-      subscription.unsubscribe()
-    }
+    checkAuth()
+    return () => subscription.unsubscribe()
   }, [pathname])
 
   const checkAuth = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setIsLoading(false)
-        if (!publicPaths.includes(pathname)) {
-          router.push("/auth/login")
-        }
-        return
-      }
-      setUser(user)
-      await fetchProfile(user.id)
-    } catch (error) {
-      console.error("Error checking auth:", error)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      if (!publicPaths.includes(pathname)) router.push("/auth/login")
       setIsLoading(false)
+      return
     }
+    setUser(user)
+    await fetchProfile(user.id)
   }
 
   const fetchProfile = async (userId: string) => {
     try {
+      // 1. Buscamos en 'user_profiles' que es donde suele estar el flag de registro
       const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
+        .from("user_profiles")
+        .select("id, registration_complete")
         .eq("id", userId)
         .single()
 
-      setProfile(profileData)
+      // 2. Buscamos en 'profiles' los datos de suscripción (según tu captura de Supabase)
+      const { data: subData } = await supabase
+        .from("profiles")
+        .select("subscription_status, trial_ends_at")
+        .eq("id", userId)
+        .single()
 
-      if (profileData) {
-        const isExpired = new Date() > new Date(profileData.trial_ends_at)
-        const isNotActive = profileData.subscription_status !== 'active'
+      const fullProfile = { ...profileData, ...subData }
+      setProfile(fullProfile)
 
-        if (isExpired && isNotActive && pathname.startsWith('/dashboard')) {
+      if (fullProfile) {
+        // Lógica de Suscripción
+        const isExpired = fullProfile.trial_ends_at ? (new Date() > new Date(fullProfile.trial_ends_at)) : false
+        const isNotActive = fullProfile.subscription_status !== 'active'
+
+        if (fullProfile.registration_complete && isExpired && isNotActive && pathname.startsWith('/dashboard')) {
           router.push("/checkout")
           return
         }
 
-        if (!profileData.registration_complete && pathname !== "/registro") {
+        // Lógica de Registro (Si ya está completo, mandarlo al dashboard)
+        if (!fullProfile.registration_complete && pathname !== "/registro") {
           router.push("/registro")
-        } else if (profileData.registration_complete && pathname === "/registro") {
+        } else if (fullProfile.registration_complete && (pathname === "/registro" || pathname === "/")) {
           router.push("/dashboard")
         }
       }
     } catch (error) {
-      console.error("Error fetching profile:", error)
+      console.error("Error cargando perfil:", error)
     } finally {
       setIsLoading(false)
     }
@@ -118,47 +111,19 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
 
   return (
     <ThemeSettingsProvider>
-      <ThemedContent user={user} profile={profile}>
-        {children}
-      </ThemedContent>
+      <ThemedContent user={user} profile={profile}>{children}</ThemedContent>
     </ThemeSettingsProvider>
   )
 }
 
-// ESTA ES LA FUNCIÓN QUE FALTABA O DABA ERROR
-function ThemedContent({ 
-  children, 
-  user,
-  profile 
-}: { 
-  children: ReactNode
-  user: User | null
-  profile: UserProfile | null
-}) {
+function ThemedContent({ children, user, profile }: { children: ReactNode, user: User | null, profile: UserProfile | null }) {
   const { theme } = useThemeSettings()
-
   return (
-    <div 
-      className="min-h-screen relative"
-      style={{
-        backgroundColor: theme.background_color,
-        color: theme.text_color,
-      }}
-    >
+    <div className="min-h-screen relative" style={{ backgroundColor: theme.background_color, color: theme.text_color }}>
       {theme.background_image_url && (
-        <div 
-          className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: `url(${theme.background_image_url})`,
-            opacity: theme.background_opacity / 100,
-          }}
-        />
+        <div className="fixed inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url(${theme.background_image_url})`, opacity: theme.background_opacity / 100 }} />
       )}
-      
-      <div className="relative z-10">
-        {children}
-      </div>
-
+      <div className="relative z-10">{children}</div>
       <ThemeCustomizer />
     </div>
   )
