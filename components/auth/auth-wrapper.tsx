@@ -4,23 +4,14 @@ import { useEffect, useState, ReactNode } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { User } from "@supabase/supabase-js"
-import { ThemeSettingsProvider, useThemeSettings } from "@/lib/theme-context"
+import { ThemeSettingsProvider } from "@/lib/theme-context"
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer"
-
-interface UserProfile {
-  id: string
-  nombres: string
-  apellidos: string
-  cedula: string
-  telefono: string
-  registration_complete: boolean
-  avatar_url: string | null
-}
 
 export function AuthWrapper({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profile, setProfile] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isMounted, setIsMounted] = useState(false) // NUEVO: Para evitar Error #418
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
@@ -28,7 +19,8 @@ export function AuthWrapper({ children }: { children: ReactNode }) {
   const publicPaths = ["/auth/login", "/auth/callback", "/auth/error"]
 
   useEffect(() => {
-    // 1. Verificar sesión actual
+    setIsMounted(true) // Marcamos que ya estamos en el navegador
+
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
@@ -42,20 +34,18 @@ export function AuthWrapper({ children }: { children: ReactNode }) {
     
     initAuth()
 
-    // 2. ESCUCHA ACTIVA: Esto es lo que desbloquea el APK al volver de Google
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         setUser(session.user)
         await fetchProfile(session.user.id)
-        setIsLoading(false) // CRÍTICO: Apaga el cargando al recibir la sesión
       } else {
         setUser(null)
         setProfile(null)
         if (!publicPaths.includes(pathname)) {
           router.push("/auth/login")
         }
-        setIsLoading(false)
       }
+      setIsLoading(false)
     })
 
     return () => subscription.unsubscribe()
@@ -68,9 +58,15 @@ export function AuthWrapper({ children }: { children: ReactNode }) {
       if (data && !data.registration_complete && pathname !== "/registro") {
         router.push("/registro")
       }
-    } catch (e) { console.error(e) }
-    finally { setIsLoading(false) }
+    } catch (e) { 
+      console.error("Error perfil:", e) 
+    } finally {
+      setIsLoading(false)
+    }
   }
+
+  // PASO CRÍTICO: Si no ha cargado el cliente, no renderizamos nada pesado
+  if (!isMounted) return <div className="min-h-screen bg-gray-900" />
 
   if (isLoading) {
     return (
@@ -92,12 +88,4 @@ export function AuthWrapper({ children }: { children: ReactNode }) {
   )
 }
 
-function ThemedContent({ children, user, profile }: any) {
-  const { theme } = useThemeSettings()
-  return (
-    <div className="min-h-screen relative" style={{ backgroundColor: theme.background_color, color: theme.text_color }}>
-      <div className="relative z-10">{children}</div>
-      <ThemeCustomizer />
-    </div>
-  )
-}
+// ... Mantén tu función ThemedContent igual abajo
