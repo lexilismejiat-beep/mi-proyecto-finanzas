@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import Script from 'next/script' // Importamos el componente correcto
 
 export default function CheckoutPage() {
   const supabase = createClientComponentClient()
@@ -17,13 +18,14 @@ export default function CheckoutPage() {
   const openWompiWidget = () => {
     if (!user) return alert("Debes estar logueado")
 
-    // @ts-ignore (El script de Wompi se carga globalmente)
+    // @ts-ignore
     const checkout = new WidgetCheckout({
       currency: 'USD',
-      amountInCents: 700, // $7.00 USD (Wompi maneja centavos)
-      reference: user.id, // ¡CRÍTICO! Enviamos el ID del usuario para el Webhook
+      amountInCents: 700,
+      reference: user.id,
       publicKey: process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY,
-      redirectUrl: 'https://tu-app.vercel.app/dashboard', // A donde vuelve tras pagar
+      // Usamos window.location.origin para que funcione en local y en vercel automáticamente
+      redirectUrl: `${window.location.origin}/dashboard`, 
     })
 
     checkout.open((result: any) => {
@@ -37,17 +39,17 @@ export default function CheckoutPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      {/* Cargamos el script de Wompi correctamente */}
+      <Script 
+        src="https://checkout.wompi.co/widget.js" 
+        strategy="beforeInteractive" 
+      />
+
       <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
         <h1 className="text-2xl font-bold mb-4">Tu tiempo de prueba ha terminado</h1>
         <p className="text-gray-600 mb-6">
           Para continuar gestionando tus finanzas y acceder a la futura APK, suscríbete por solo **$7 USD** al mes.
         </p>
-        
-        {/* Script de Wompi se carga aquí */}
-        <script
-          src="https://checkout.wompi.co/widget.js"
-          async
-        ></script>
 
         <button
           onClick={openWompiWidget}
