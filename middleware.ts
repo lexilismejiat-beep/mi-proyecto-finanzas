@@ -3,10 +3,10 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // 1. Primero ejecutamos la actualización de sesión normal
+  // 1. Refresca la sesión (tu código original)
   const response = await updateSession(request)
 
-  // 2. Creamos un cliente de Supabase para leer el perfil
+  // 2. Creamos cliente para hablar con Supabase
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -22,8 +22,8 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 3. Lógica de restricción
-  if (user) {
+  // 3. Si el usuario está en el Dashboard, revisamos su pago
+  if (user && request.nextUrl.pathname.startsWith('/dashboard')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('subscription_status, trial_ends_at')
@@ -33,15 +33,10 @@ export async function middleware(request: NextRequest) {
     if (profile) {
       const now = new Date()
       const trialEnd = new Date(profile.trial_ends_at)
-      const isExpired = now > trialEnd
-      const isActive = profile.subscription_status === 'active'
-
-      // Si expiró y no es activo, y NO está ya en la página de pago, redirigir
-      // Evitamos el bucle infinito permitiendo el acceso a /checkout y a la API de Wompi
-      const isAuthPage = request.nextUrl.pathname.startsWith('/checkout') || 
-                         request.nextUrl.pathname.startsWith('/api/wompi')
-
-      if (isExpired && !isActive && !isAuthPage) {
+      
+      // Si el tiempo se acabó y no ha pagado...
+      if (now > trialEnd && profile.subscription_status !== 'active') {
+        // ...lo mandamos a la página de pago
         return NextResponse.redirect(new URL('/checkout', request.url))
       }
     }
@@ -51,7 +46,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/dashboard/:path*'], // Solo vigilamos el dashboard
 }
