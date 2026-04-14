@@ -6,7 +6,7 @@ import Script from 'next/script'
 export default function CheckoutPage() {
   const supabase = createClientComponentClient()
   const [user, setUser] = useState<any>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [isScriptLoaded, setIsScriptLoaded] = useState(false)
 
   useEffect(() => {
     const getUser = async () => {
@@ -16,9 +16,10 @@ export default function CheckoutPage() {
     getUser()
   }, [supabase])
 
-  const openWompi = () => {
-    if (!user) return alert("Inicia sesión primero")
-    
+  const handlePago = () => {
+    if (!user) return alert("Por favor, inicia sesión en /auth/login")
+    if (!isScriptLoaded) return alert("Cargando Wompi... espera un segundo.")
+
     // @ts-ignore
     const checkout = new WidgetCheckout({
       currency: 'USD',
@@ -36,27 +37,25 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4 text-black">
       <Script 
         src="https://checkout.wompi.co/widget.js" 
         strategy="afterInteractive"
-        onLoad={() => setIsLoaded(true)}
+        onLoad={() => setIsScriptLoaded(true)}
       />
 
-      <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center border border-gray-700">
-        <h1 className="text-3xl font-bold mb-4">Membresía Expirada</h1>
-        <p className="text-gray-400 mb-8">
-          Tu tiempo de prueba ha terminado. Suscríbete por <b>$7 USD</b> para seguir gestionando tus finanzas.
+      <div className="bg-gray-50 p-8 rounded-2xl shadow-xl max-w-md w-full text-center border">
+        <h1 className="text-2xl font-bold mb-4">Suscripción Requerida</h1>
+        <p className="text-gray-600 mb-8">
+          Tu prueba gratuita ha terminado. Activa tu cuenta por <b>$7 USD</b> mensuales.
         </p>
 
         <button
-          onClick={openWompi}
-          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-105"
+          onClick={handlePago}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all"
         >
-          Pagar Suscripción
+          Pagar con Wompi
         </button>
-        
-        {!isLoaded && <p className="text-xs text-gray-500 mt-4">Cargando pasarela de pago...</p>}
       </div>
     </div>
   )
