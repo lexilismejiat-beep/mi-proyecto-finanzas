@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation" 
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { StatsCards } from "@/components/dashboard/stats-cards"
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
   const supabase = createClient()
+  const router = useRouter()
   const { theme } = useThemeSettings()
 
   useEffect(() => {
@@ -25,51 +27,63 @@ export default function DashboardPage() {
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        
+        // CORRECCIÓN: Si no hay usuario, mandamos al login de tu dominio
+        if (!user) {
+          router.push("/auth/login")
+          return
+        }
 
-        // 1. Buscamos en la tabla 'profiles' que es la que tiene el 'full_name' y 'cedula'
-        const { data: profileData } = await supabase
-          .from("profiles")
+        // 1. Verificar si el registro está completo en la tabla user_profiles
+        const { data: profileData, error: profileError } = await supabase
+          .from("user_profiles") 
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
         
-        if (profileData) {
-          setProfile(profileData)
+        // Si no hay perfil o no ha completado el registro, lo mandamos a /registro
+        if (!profileData || !profileData.registration_complete) {
+          router.push("/registro")
+          return
+        }
 
-          // 2. Cálculo de finanzas usando la cédula como user_id
-          if (profileData.cedula) {
-            const { data: transData } = await supabase
-              .from("transacciones")
-              .select("monto, tipo")
-              .eq("user_id", profileData.cedula) 
+        setProfile(profileData)
 
-            if (transData) {
-              const income = transData
-                .filter((t: any) => t.tipo?.trim() === "Ingreso")
-                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-              
-              const expenses = transData
-                .filter((t: any) => t.tipo?.trim() === "Egreso")
-                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+        // 2. Cálculo de finanzas usando la cédula como user_id
+        if (profileData.cedula) {
+          const { data: transData } = await supabase
+            .from("transacciones")
+            .select("monto, tipo")
+            .eq("user_id", profileData.cedula) 
 
-              setTotals({ income, expenses, balance: income - expenses })
-            }
+          if (transData) {
+            const income = transData
+              .filter((t: any) => t.tipo?.trim() === "Ingreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            
+            const expenses = transData
+              .filter((t: any) => t.tipo?.trim() === "Egreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+
+            setTotals({ income, expenses, balance: income - expenses })
           }
         }
       } catch (err) {
-        console.error("Error en Dashboard:", err)
+        console.error("Error crítico en Dashboard:", err)
       } finally {
         setLoading(false)
       }
     }
     fetchData()
-  }, [supabase])
+  }, [supabase, router])
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">
-        <p className="animate-pulse">Cargando tus finanzas...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white font-mono">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <p className="animate-pulse text-emerald-500">Cargando tus finanzas...</p>
+        </div>
       </div>
     )
   }
@@ -90,8 +104,7 @@ export default function DashboardPage() {
         sidebarCollapsed && "lg:ml-16"
       )}>
         <TopBar 
-          // CORRECCIÓN: Usamos full_name de tu tabla profiles
-          userName={profile?.full_name || "Usuario"} 
+          userName={profile?.nombres || "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
