@@ -15,7 +15,7 @@ export default function RootPage() {
       if (session) {
         router.replace("/dashboard")
       } else {
-        router.replace("/login") // O a donde quieras enviar a los no logueados
+        router.replace("/auth/login") // O a donde quieras enviar a los no logueados
       }
       setIsMounting(false)
     }
