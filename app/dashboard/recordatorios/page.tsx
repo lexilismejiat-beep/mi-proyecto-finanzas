@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Plus, Pencil, Trash2, Bell, Calendar, Clock, 
-  AlertCircle, CheckCircle2, Loader2, BellRing, Send 
+  AlertCircle, CheckCircle2, Loader2, BellRing, Send,
+  MessageCircle // El icono de WhatsApp
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, differenceInDays, parseISO } from "date-fns"
@@ -149,9 +150,10 @@ export default function RecordatoriosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // CONSULTA A LA TABLA CORRECTA: user_profiles
       const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
+        .from("user_profiles")
+        .select("cedula, nombres, telefono, telegram_id")
         .eq("id", user.id)
         .single()
       
@@ -177,51 +179,50 @@ export default function RecordatoriosPage() {
   }, [])
 
   const handleTestBot = async () => {
-    if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
-      toast.error("Vincule su ID de Telegram numérico en su perfil.");
+    if (!profile?.telegram_id) {
+      toast.error("Vincule su Telegram ID en su perfil.");
       return;
     }
 
     setIsTestingBot(true);
     try {
-      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?t=${Date.now()}`;
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram&t=${Date.now()}`;
       const response = await fetch(url, { method: 'GET', mode: 'cors' });
-      if (!response.ok) throw new Error("Error en la conexión");
       const result = await response.json();
       if (result.success || result.enviados > 0) {
-        toast.success("✅ ¡Recordatorios procesados! Revisa tu Telegram.");
+        toast.success("✅ ¡Prueba de Telegram enviada!");
       } else {
-        toast.error("La función respondió pero no se detectaron envíos.");
+        toast.error("No hay recordatorios pendientes.");
       }
     } catch (error) {
-      console.error("Error en la petición:", error);
-      toast.error("Error de red. Intenta recargar la página.");
+      toast.error("Error al conectar con Telegram.");
     } finally {
       setIsTestingBot(false);
     }
   };
 
   const handleTestWhatsApp = async () => {
-    if (!profile?.phone) {
-      toast.error("Vincule su número de WhatsApp en su perfil.");
+    if (!profile?.telefono) {
+      toast.error("No tienes un número de teléfono en tu perfil.");
       return;
     }
 
     setIsTestingWhatsApp(true);
     try {
-      // Usamos el mismo handler pero podrías pasar un parámetro para diferenciar si fuera necesario
-      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&t=${Date.now()}`;
+      // Enviamos el tipo whatsapp y opcionalmente el teléfono si tu función lo requiere
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${profile.telefono}&t=${Date.now()}`;
       const response = await fetch(url, { method: 'GET', mode: 'cors' });
-      if (!response.ok) throw new Error("Error en la conexión");
+      
+      if (!response.ok) throw new Error();
+
       const result = await response.json();
       if (result.success || result.enviados > 0) {
-        toast.success("✅ ¡Prueba enviada! Revisa tu WhatsApp.");
+        toast.success(`✅ ¡WhatsApp enviado a ${profile.telefono}!`);
       } else {
-        toast.error("No se pudo enviar el mensaje de prueba.");
+        toast.error("La función no procesó el envío de WhatsApp.");
       }
     } catch (error) {
-      console.error("Error WhatsApp:", error);
-      toast.error("Error de red al intentar probar WhatsApp.");
+      toast.error("Error de red con el Bot de WhatsApp.");
     } finally {
       setIsTestingWhatsApp(false);
     }
@@ -264,24 +265,29 @@ export default function RecordatoriosPage() {
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
       
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar userName={profile?.full_name || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
+        <TopBar userName={profile?.nombres || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
         
         <main className="p-4 sm:p-8 space-y-6 max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
-              <p className="text-gray-400 text-sm">Alertas automáticas vía Telegram y WhatsApp.</p>
+              <p className="text-gray-400 text-sm">Alertas automáticas vía WhatsApp y Telegram.</p>
             </div>
             
             <div className="flex items-center gap-2">
+              {/* BOTÓN WHATSAPP CON LOGO CORRECTO */}
               <Button 
                 variant="outline" 
                 onClick={handleTestWhatsApp}
                 disabled={isTestingWhatsApp || loading}
-                className="border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300 gap-2"
+                className="border-green-500/30 text-green-500 hover:bg-green-500/10 hover:text-green-400 gap-2 font-medium"
               >
-                {isTestingWhatsApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                {isTestingWhatsApp ? "Probando..." : "Probar WhatsApp"}
+                {isTestingWhatsApp ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageCircle size={18} className="fill-green-500/10" />
+                )}
+                {isTestingWhatsApp ? "Enviando..." : "Probar WhatsApp"}
               </Button>
 
               <Button 
@@ -291,13 +297,14 @@ export default function RecordatoriosPage() {
                 className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 gap-2"
               >
                 {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                {isTestingBot ? "Probando..." : "Probar Telegram"}
+                {isTestingBot ? "Enviando..." : "Probar Telegram"}
               </Button>
 
               <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
             </div>
           </div>
 
+          {/* CARD DE RESUMEN */}
           <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
             <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4">
@@ -322,6 +329,7 @@ export default function RecordatoriosPage() {
             </CardContent>
           </Card>
 
+          {/* LISTADO DE RECORDATORIOS */}
           <div className="grid gap-4">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Clock size={14} /> Calendario de Pagos
