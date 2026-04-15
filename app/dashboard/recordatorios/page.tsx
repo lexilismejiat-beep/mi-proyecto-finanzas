@@ -141,6 +141,7 @@ export default function RecordatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [isTestingBot, setIsTestingBot] = useState(false)
+  const [isTestingWhatsApp, setIsTestingWhatsApp] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -175,7 +176,6 @@ export default function RecordatoriosPage() {
     fetchData() 
   }, [])
 
-  // --- FUNCIÓN DEL BOTÓN TEST ACTUALIZADA ---
   const handleTestBot = async () => {
     if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
       toast.error("Vincule su ID de Telegram numérico en su perfil.");
@@ -184,18 +184,10 @@ export default function RecordatoriosPage() {
 
     setIsTestingBot(true);
     try {
-     // LA URL CORRECTA NO LLEVA ".functions" ANTES DE SUPABASE
-const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?t=${Date.now()}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?t=${Date.now()}`;
+      const response = await fetch(url, { method: 'GET', mode: 'cors' });
       if (!response.ok) throw new Error("Error en la conexión");
-
       const result = await response.json();
-
       if (result.success || result.enviados > 0) {
         toast.success("✅ ¡Recordatorios procesados! Revisa tu Telegram.");
       } else {
@@ -206,6 +198,32 @@ const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler
       toast.error("Error de red. Intenta recargar la página.");
     } finally {
       setIsTestingBot(false);
+    }
+  };
+
+  const handleTestWhatsApp = async () => {
+    if (!profile?.phone) {
+      toast.error("Vincule su número de WhatsApp en su perfil.");
+      return;
+    }
+
+    setIsTestingWhatsApp(true);
+    try {
+      // Usamos el mismo handler pero podrías pasar un parámetro para diferenciar si fuera necesario
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&t=${Date.now()}`;
+      const response = await fetch(url, { method: 'GET', mode: 'cors' });
+      if (!response.ok) throw new Error("Error en la conexión");
+      const result = await response.json();
+      if (result.success || result.enviados > 0) {
+        toast.success("✅ ¡Prueba enviada! Revisa tu WhatsApp.");
+      } else {
+        toast.error("No se pudo enviar el mensaje de prueba.");
+      }
+    } catch (error) {
+      console.error("Error WhatsApp:", error);
+      toast.error("Error de red al intentar probar WhatsApp.");
+    } finally {
+      setIsTestingWhatsApp(false);
     }
   };
 
@@ -252,10 +270,20 @@ const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
-              <p className="text-gray-400 text-sm">Alertas automáticas vía Telegram.</p>
+              <p className="text-gray-400 text-sm">Alertas automáticas vía Telegram y WhatsApp.</p>
             </div>
             
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleTestWhatsApp}
+                disabled={isTestingWhatsApp || loading}
+                className="border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300 gap-2"
+              >
+                {isTestingWhatsApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
+                {isTestingWhatsApp ? "Probando..." : "Probar WhatsApp"}
+              </Button>
+
               <Button 
                 variant="outline" 
                 onClick={handleTestBot}
