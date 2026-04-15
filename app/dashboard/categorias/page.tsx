@@ -1,45 +1,94 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Sidebar } from "@/components/dashboard/sidebar"
+import { TopBar } from "@/components/dashboard/top-bar"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-// ... (tus otros imports como Sidebar, TopBar, etc.)
+import { useThemeSettings } from "@/lib/theme-context"
 
 export default function CategoriasPage() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
-  const [categorias, setCategorias] = useState<any[]>([])
+  const [categorias, setCategorias] = useState<any[]>([]) // Estado para tus categorías
+  
   const supabase = createClient()
+  const { theme } = useThemeSettings()
 
   useEffect(() => {
-    const fetchData = async () => {
-      // 1. Obtener el usuario actual (Igual que en Transacciones)
+    const fetchAllData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 2. Obtener el perfil para el nombre/avatar
+      // 1. Cargar Perfil (Igual que en Transacciones)
       const { data: profileData } = await supabase
         .from("user_profiles")
-        .select("*")
+        .select("*") 
         .eq("id", user.id)
         .single()
       
       if (profileData) setProfile(profileData)
 
-      // 3. ¡EL FILTRO CRÍTICO! 
-      // Aquí es donde le decimos a Supabase: "Tráeme solo las categorías de este ID"
-      const { data: categoriasData, error } = await supabase
-        .from("categorias") // Asegúrate de que el nombre de la tabla sea correcto
+      // 2. Cargar Categorías FILTRADAS por el usuario logueado
+      const { data: categoriasData } = await supabase
+        .from("categorias") // Verifica que este sea el nombre exacto de tu tabla
         .select("*")
-        .eq("user_id", user.id) // <--- ESTO evita que todos vean todo
+        .eq("user_id", user.id) // <--- CRÍTICO: Filtra por el dueño
       
-      if (categoriasData) {
-        setCategorias(categoriasData)
-      }
+      if (categoriasData) setCategorias(categoriasData)
     }
-
-    fetchData()
+    
+    fetchAllData()
   }, [supabase])
 
   return (
-    // Aquí tu JSX usando el estado 'categorias' filtrado
+    <div className="min-h-screen bg-background">
+      <Sidebar 
+        collapsed={sidebarCollapsed} 
+        onCollapsedChange={setSidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        onMobileOpenChange={setMobileSidebarOpen}
+        sidebarColor={theme.sidebar_color}
+      />
+
+      <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
+        <TopBar 
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url} 
+          onMenuClick={() => setMobileSidebarOpen(true)}
+        />
+
+        <main className="p-4 sm:p-6 lg:p-8">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold" style={{ color: theme.text_color }}>
+                Categorías
+              </h1>
+              <p className="text-muted-foreground">Gestiona tus categorías personales</p>
+            </div>
+            <Button className="gap-2" style={{ backgroundColor: theme.primary_color }}>
+              <Plus className="h-4 w-4" />
+              Nueva Categoría
+            </Button>
+          </div>
+
+          {/* LISTADO DE CATEGORÍAS */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {categorias.map((cat) => (
+              <div 
+                key={cat.id} 
+                className="p-4 rounded-lg border" 
+                style={{ backgroundColor: theme.card_color, color: theme.text_color }}
+              >
+                {cat.nombre}
+              </div>
+            ))}
+          </div>
+        </main>
+      </div>
+    </div>
   )
 }
