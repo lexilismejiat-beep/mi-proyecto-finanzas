@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image" // Importamos para manejar tu logo
+import Image from "next/image"
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -72,7 +72,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 font-sans">
       <Card className="w-full max-w-md shadow-2xl border-0 bg-[#1e293b] text-white">
         <CardHeader className="text-center space-y-6 pb-2">
-          {/* LOGO PERSONALIZADO */}
+          {/* TU LOGO */}
           <div className="mx-auto w-20 h-20 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 overflow-hidden">
             <Image 
               src="/logo.png" 
@@ -85,19 +85,18 @@ export default function LoginPage() {
           
           <div className="space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight">Finanzas Personales</CardTitle>
-            <CardDescription className="text-gray-400">
+            <CardDescription className="text-gray-400 font-medium">
               Gestiona tus finanzas de manera inteligente
             </CardDescription>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-6 pt-8 pb-10">
-          {/* BOTÓN BLANCO CON LOGO DE GOOGLE */}
-          <Button
+        <CardContent className="space-y-6 pt-8 pb-8">
+          {/* BOTÓN BLANCO REFORZADO */}
+          <button
             onClick={handleGoogleLogin}
             disabled={isLoading}
-            variant="outline"
-            className="w-full h-12 text-base font-bold bg-white hover:bg-gray-100 text-gray-900 border-none transition-all duration-200 shadow-md flex items-center justify-center gap-3"
+            className="w-full h-12 flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 rounded-md font-bold text-sm shadow-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <div className="flex items-center gap-3">
@@ -115,7 +114,22 @@ export default function LoginPage() {
                 <span>Continuar con Google</span>
               </>
             )}
-          </Button>
+          </button>
+
+          {/* ENLACES LEGALES COLOREADOS */}
+          <div className="text-center space-y-3">
+            <p className="text-[11px] text-gray-400 leading-relaxed px-4">
+              Al continuar, Google compartirá tu nombre, correo y foto de perfil con Mis Finanzas. 
+              Consulta nuestra{" "}
+              <a href="#" className="text-emerald-400 hover:text-emerald-300 transition-colors font-semibold underline underline-offset-2">
+                Política de Privacidad
+              </a>{" "}
+              y los{" "}
+              <a href="#" className="text-emerald-400 hover:text-emerald-300 transition-colors font-semibold underline underline-offset-2">
+                Términos de Servicio
+              </a>.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
