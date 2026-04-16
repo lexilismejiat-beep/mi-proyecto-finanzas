@@ -14,47 +14,52 @@ export default function CategoriasPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [categorias, setCategorias] = useState<any[]>([])
+  const [loading, setLoading] = useState(true) // Estado de carga
   
   const supabase = createClient()
   const { theme } = useThemeSettings()
 
   useEffect(() => {
     const fetchAllData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      try {
+        setLoading(true)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-      // 1. Cargamos el perfil y la foto (usando la lógica de las dos tablas que vimos antes)
-      const { data: profileData } = await supabase
-        .from("user_profiles")
-        .select(`
+        // 1. Cargamos el perfil completo con el JOIN para la foto
+        const { data: profileData } = await supabase
+          .from("user_profiles")
+          .select(`
             *,
             profiles:id (avatar_url)
           `)
-        .eq("id", user.id)
-        .single()
-      
-      if (profileData) {
-        // Aplanamos la foto para el perfil
-        const fullProfile = {
+          .eq("id", user.id)
+          .single()
+        
+        if (profileData) {
+          const fullProfile = {
             ...profileData,
             avatar_url: profileData.profiles?.avatar_url
-        }
-        setProfile(fullProfile)
+          }
+          setProfile(fullProfile)
 
-        // 2. FILTRADO CORRECTO: Usamos la CÉDULA para buscar las categorías
-        // Cambiamos user.id (UUID) por profileData.cedula
-        if (profileData.cedula) {
+          // 2. CRÍTICO: Usamos la cédula para filtrar, igual que en transacciones
+          if (profileData.cedula) {
+            console.log("Buscando categorías para cédula:", profileData.cedula)
+            
             const { data: categoriasData, error } = await supabase
               .from("categorias")
               .select("*")
-              .eq("user_id", profileData.cedula) // <--- USAMOS LA CÉDULA AQUÍ
+              .eq("user_id", profileData.cedula) // <-- Filtro por cédula
             
-            if (categoriasData) {
-                setCategorias(categoriasData)
-            } else if (error) {
-                console.error("Error cargando categorías:", error)
-            }
+            if (error) throw error
+            setCategorias(categoriasData || [])
+          }
         }
+      } catch (err) {
+        console.error("Error en categorías:", err)
+      } finally {
+        setLoading(false)
       }
     }
     
@@ -92,22 +97,29 @@ export default function CategoriasPage() {
             </Button>
           </div>
 
-          {/* LISTADO DE CATEGORÍAS */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {categorias.length > 0 ? (
-              categorias.map((cat) => (
-                <div 
-                  key={cat.id} 
-                  className="p-6 rounded-xl border shadow-sm transition-all hover:shadow-md" 
-                  style={{ backgroundColor: theme.card_color, color: theme.text_color }}
-                >
-                  <span className="font-semibold">{cat.nombre}</span>
+          {loading ? (
+            <div className="flex justify-center p-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {categorias.length > 0 ? (
+                categorias.map((cat) => (
+                  <div 
+                    key={cat.id} 
+                    className="p-6 rounded-xl border shadow-sm" 
+                    style={{ backgroundColor: theme.card_color, color: theme.text_color }}
+                  >
+                    <span className="font-semibold text-lg">{cat.nombre}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-full text-center p-12 border-2 border-dashed rounded-xl">
+                  <p className="text-muted-foreground">No encontramos categorías vinculadas a tu cédula: <strong>{profile?.cedula}</strong></p>
                 </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground col-span-full">No tienes categorías registradas aún.</p>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
