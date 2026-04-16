@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
-// Lista de meses para el filtro
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
   { value: 2, label: "Marzo" }, { value: 3, label: "Abril" },
@@ -27,7 +26,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
-  // ESTADO PARA EL FILTRO: Por defecto, el mes actual
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -49,52 +47,56 @@ export default function DashboardPage() {
         
         if (profileData) {
           setProfile(profileData)
-          if (profileData.cedula) {
-            // Definimos el rango de fechas para el mes seleccionado
-            const firstDay = new Date(selectedYear, selectedMonth, 1).toISOString()
-            const lastDay = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
+          
+          // Rango de fechas para el filtro
+          const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
+          const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
 
-            const { data: transData } = await supabase
-              .from("transacciones")
-              .select("monto, tipo, fecha")
-              .eq("user_id", profileData.cedula)
-              .gte("fecha", firstDay) // Mayor o igual al primer día del mes
-              .lte("fecha", lastDay)  // Menor o igual al último día del mes
+          // CAMBIO CLAVE: Usamos 'created_at' que es el nombre real en tu Supabase
+          const { data: transData, error } = await supabase
+            .from("transacciones")
+            .select("monto, tipo")
+            .eq("user_id", profileData.cedula) 
+            .gte("created_at", startOfMonth)
+            .lte("created_at", endOfMonth)
 
-            if (transData) {
-              const income = transData
-                .filter((t: any) => t.tipo?.trim() === "Ingreso")
-                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-              
-              const expenses = transData
-                .filter((t: any) => t.tipo?.trim() === "Egreso")
-                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+          if (error) throw error
 
-              setTotals({ income, expenses, balance: income - expenses })
-            } else {
-              setTotals({ income: 0, expenses: 0, balance: 0 })
-            }
+          if (transData) {
+            // Filtramos comparando exactamente con "Ingreso" y "Egreso" como se ve en tu captura
+            const income = transData
+              .filter((t: any) => t.tipo === "Ingreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            
+            const expenses = transData
+              .filter((t: any) => t.tipo === "Egreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+
+            setTotals({ income, expenses, balance: income - expenses })
           }
         }
       } catch (err) {
-        console.error("Error en Dashboard:", err)
+        console.error("Error:", err)
       } finally {
         setLoading(false)
       }
     }
     fetchData()
-    // Se vuelve a ejecutar cada vez que el mes o el año cambian
   }, [supabase, selectedMonth, selectedYear])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">
-        <p className="animate-pulse text-lg">Actualizando datos mensuales...</p>
-      </div>
-    )
-  }
-
   const backgroundImage = profile?.background_image || theme.background_image
+
+  // Estilo de "bordado" blanco (Text Outline) mejorado
+  const textWithOutline = {
+    color: theme.text_color || '#1e293b',
+    textShadow: `
+      -1.5px -1.5px 0 #FFFFFF,  
+       1.5px -1.5px 0 #FFFFFF,
+      -1.5px  1.5px 0 #FFFFFF,
+       1.5px  1.5px 0 #FFFFFF,
+       0px 2px 4px rgba(0,0,0,0.2)
+    `
+  }
 
   return (
     <div 
@@ -114,8 +116,7 @@ export default function DashboardPage() {
       
       <div className={cn(
         "transition-all duration-300 min-h-screen flex flex-col", 
-        "ml-0",
-        "lg:ml-64", 
+        "ml-0", "lg:ml-64", 
         sidebarCollapsed && "lg:ml-16"
       )}>
         <TopBar 
@@ -128,38 +129,31 @@ export default function DashboardPage() {
           
           <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-bold" style={{ color: theme.text_color || '#1e293b' }}>
+              <h2 className="text-3xl font-black tracking-tight" style={textWithOutline}>
                 Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
               </h2>
-              <p className="text-sm opacity-70" style={{ color: theme.text_color }}>
+              <p className="text-base font-bold" style={textWithOutline}>
                 Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
               </p>
             </div>
 
-            {/* FILTRO DE MES */}
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/20">
+            <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
               <select 
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="bg-transparent border-none outline-none font-medium cursor-pointer"
-                style={{ color: theme.text_color || '#1e293b' }}
+                className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
               >
                 {MONTHS.map((month) => (
-                  <option key={month.value} value={month.value} className="text-black">
-                    {month.label}
-                  </option>
+                  <option key={month.value} value={month.value}>{month.label}</option>
                 ))}
               </select>
               <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="bg-transparent border-none outline-none font-medium cursor-pointer"
-                style={{ color: theme.text_color || '#1e293b' }}
+                className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
               >
                 {[2024, 2025, 2026].map((year) => (
-                  <option key={year} value={year} className="text-black">
-                    {year}
-                  </option>
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
             </div>
@@ -182,7 +176,6 @@ export default function DashboardPage() {
                 cardColor={theme.card_color} 
                 textColor={theme.text_color} 
                 userCedula={profile?.cedula}
-                // Importante: Pasa los filtros a la tabla también para que coincidan
                 selectedMonth={selectedMonth}
                 selectedYear={selectedYear}
               />
