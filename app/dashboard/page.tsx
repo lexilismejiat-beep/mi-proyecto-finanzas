@@ -66,85 +66,88 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">
-        <p className="animate-pulse text-lg">Cargando tus finanzas...</p>
+        <p className="animate-pulse">Cargando tus finanzas...</p>
       </div>
     )
   }
 
   return (
     <div 
-      className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed" 
+      className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed transition-all duration-700" 
       style={{ 
-        // PUNTO 3: Fondo dinámico. Si no hay imagen, usa el color de fondo.
+        // Aplicamos la imagen de fondo directamente aquí
         backgroundImage: theme.background_image ? `url(${theme.background_image})` : 'none',
-        backgroundColor: !theme.background_image ? (theme.background_color || "#F8FAFC") : 'transparent' 
+        backgroundColor: theme.background_color || "#F8FAFC"
       }}
     >
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onCollapsedChange={setSidebarCollapsed}
-        mobileOpen={mobileSidebarOpen}
-        onMobileOpenChange={setMobileSidebarOpen}
-        sidebarColor={theme.sidebar_color}
-      />
-      
-      {/* PUNTO 2: Eliminamos el overflow y ajustamos el ancho para evitar desbordamiento en PC */}
-      <div className={cn(
-        "transition-all duration-300 min-h-screen flex flex-col", 
-        "ml-0",
-        "lg:ml-64", 
-        sidebarCollapsed && "lg:ml-16"
-      )}>
-        <TopBar 
-          userName={profile?.full_name || "Usuario"} 
-          avatarUrl={profile?.avatar_url}
-          onMenuClick={() => setMobileSidebarOpen(true)}
+      {/* Capa de opacidad sobre la imagen para que el contenido no se pierda */}
+      <div 
+        className="min-h-screen w-full flex flex-col"
+        style={{ backgroundColor: `rgba(0,0,0, ${1 - (theme.background_opacity || 1)})` }}
+      >
+        <Sidebar 
+          collapsed={sidebarCollapsed} 
+          onCollapsedChange={setSidebarCollapsed}
+          mobileOpen={mobileSidebarOpen}
+          onMobileOpenChange={setMobileSidebarOpen}
+          sidebarColor={theme.sidebar_color}
         />
+        
+        <div className={cn(
+          "transition-all duration-300 min-h-screen flex flex-col w-full", 
+          "ml-0",
+          "lg:ml-64", 
+          sidebarCollapsed && "lg:ml-16"
+        )}>
+          {/* TopBar sin fondo sólido */}
+          <TopBar 
+            userName={profile?.full_name || "Usuario"} 
+            avatarUrl={profile?.avatar_url}
+            onMenuClick={() => setMobileSidebarOpen(true)}
+            className="bg-transparent backdrop-blur-sm border-b border-white/10"
+          />
 
-        {/* Quitamos fondos blancos de aquí para que se vea el fondo de pantalla */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
-          
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold" style={{ color: theme.text_color }}>
-              Resumen Financiero
-            </h2>
-          </div>
+          <main className="flex-1 p-4 md:p-8 w-full max-w-full overflow-x-hidden">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold" style={{ color: theme.text_color }}>
+                Resumen Financiero
+              </h2>
+            </div>
 
-          <div className="mb-8 w-full">
-            <StatsCards 
-              totalIncome={totals.income} 
-              totalExpenses={totals.expenses} 
-              currentBalance={totals.balance}
-              cardColor={theme.card_color} 
-              textColor={theme.text_color} 
-              primaryColor={theme.primary_color} 
-            />
-          </div>
-
-          {/* Grid Principal */}
-          <div className="grid gap-6 lg:grid-cols-3 w-full">
-            
-            {/* PUNTO 1: En móvil, transacciones (order-1) va ANTES que identidad (order-2) */}
-            <div className="lg:col-span-2 order-1 overflow-hidden">
-              <TransactionsTable 
-                cardColor={theme.card_color} 
+            {/* Pasamos las propiedades de color transparentes a los componentes */}
+            <div className="mb-8 w-full">
+              <StatsCards 
+                totalIncome={totals.income} 
+                totalExpenses={totals.expenses} 
+                currentBalance={totals.balance}
+                // Forzamos que las tarjetas sean traslúcidas
+                cardColor="rgba(255,255,255,0.05)" 
                 textColor={theme.text_color} 
-                userCedula={profile?.cedula} 
+                primaryColor={theme.primary_color} 
               />
             </div>
 
-            {/* PUNTO 1: Identidad Financiera aparece después en móvil */}
-            <div className="lg:col-span-1 order-2">
-              <CedulaSection 
-                profile={profile} 
-                cardColor={theme.card_color} 
-                textColor={theme.text_color} 
-                primaryColor={theme.primary_color}
-              />
-            </div>
+            <div className="grid gap-6 lg:grid-cols-3 w-full items-start">
+              <div className="lg:col-span-2 order-1 overflow-hidden">
+                <TransactionsTable 
+                  // Usamos un fondo sutil que deje ver la imagen
+                  cardColor="rgba(255,255,255,0.03)"
+                  textColor={theme.text_color} 
+                  userCedula={profile?.cedula} 
+                />
+              </div>
 
-          </div>
-        </main>
+              <div className="lg:col-span-1 order-2">
+                <CedulaSection 
+                  profile={profile} 
+                  cardColor="rgba(255,255,255,0.05)"
+                  textColor={theme.text_color} 
+                  primaryColor={theme.primary_color}
+                />
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   )
