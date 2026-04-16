@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { 
-  Plus, Wallet, Car, Utensils, Zap, Heart, 
-  CreditCard, ShoppingBag, ChevronDown, ChevronUp, Calendar as CalendarIcon 
+  Car, Utensils, Zap, Heart, CreditCard, 
+  ShoppingBag, ChevronDown, ChevronUp, Calendar as CalendarIcon 
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
@@ -56,21 +55,19 @@ const GRUPOS_MAESTROS: Record<string, { icon: any, keywords: string[], desc: str
 }
 
 export default function CategoriasPage() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [grupos, setGrupos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   
-  // --- ESTADOS DE FILTRO ---
+  // Filtros de fecha
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   const supabase = createClient()
   const { theme } = useThemeSettings()
 
-  // 1. Carga de Perfil (Solo una vez)
+  // 1. Cargar perfil del usuario
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -84,7 +81,7 @@ export default function CategoriasPage() {
     fetchProfile()
   }, [])
 
-  // 2. Procesamiento de Categorías (Se dispara al cambiar Mes/Año o al cargar Perfil)
+  // 2. Procesar transacciones y agrupar por categorías maestras
   useEffect(() => {
     const processCategorias = async () => {
       try {
@@ -92,36 +89,29 @@ export default function CategoriasPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // Rango de fechas igual que en reportes
         const dateFrom = startOfMonth(new Date(selectedYear, selectedMonth))
         const dateTo = endOfMonth(new Date(selectedYear, selectedMonth))
 
-        // Query filtrada por fecha y usuario
         let query = supabase
           .from("transacciones")
           .select("categoria, monto, tipo")
           .gte("created_at", startOfDay(dateFrom).toISOString())
           .lte("created_at", endOfDay(dateTo).toISOString())
 
-        if (profile?.cedula) {
-          query = query.eq("user_id", profile.cedula)
-        } else {
-          query = query.eq("user_id", user.id)
-        }
+        const userIdToFilter = profile?.cedula || user.id
+        query = query.eq("user_id", userIdToFilter)
 
         const { data: transData, error } = await query
         if (error) throw error
 
-        // Inicializar mapeo limpio
         const mapping: Record<string, any> = {}
         Object.keys(GRUPOS_MAESTROS).forEach(key => {
           mapping[key] = { ...GRUPOS_MAESTROS[key], nombre: key, total: 0, desglose: {} }
         })
 
         transData?.forEach(t => {
-          // Solo procesamos Egresos para las categorías de gasto, 
-          // a menos que quieras incluir ingresos también.
-          if (t.tipo?.trim() === "Ingreso") return;
+          // Solo contamos egresos (gastos)
+          if (t.tipo?.trim() === "Ingreso") return
 
           const catLower = t.categoria?.toLowerCase() || ""
           const nombreOriginal = t.categoria || "Sin etiqueta"
@@ -143,115 +133,92 @@ export default function CategoriasPage() {
           }
         })
 
-        // Ordenar: Mostrar primero los grupos con más gastos
-        const gruposFinales = Object.values(mapping)
-          .filter(g => g.total > 0)
-          .sort((a, b) => b.total - a.total)
-
-        setGrupos(gruposFinales)
+        setGrupos(Object.values(mapping).filter(g => g.total > 0).sort((a, b) => b.total - a.total))
       } catch (err) {
-        console.error("Error procesando categorías:", err)
+        console.error(err)
       } finally {
         setLoading(false)
       }
     }
 
     processCategorias()
-  }, [selectedMonth, selectedYear, profile?.cedula, supabase])
-
-  const toggleExpand = (index: number) => {
-    setExpandedIndex(expandedIndex === index ? null : index)
-  }
+  }, [selectedMonth, selectedYear, profile?.cedula])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: theme.background_color || "#0a0a0a" }}>
-      <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} sidebarColor={theme.sidebar_color} />
+      <Sidebar />
 
-      <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar 
-          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
-          avatarUrl={profile?.avatar_url} 
-          onMenuClick={() => setMobileSidebarOpen(true)} 
-        />
+      <div className="lg:ml-64 transition-all duration-300">
+        <TopBar userName={profile ? `${profile.nombres}` : "Usuario"} avatarUrl={profile?.avatar_url} />
 
-        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
-          {/* CABECERA CON FILTROS */}
-          <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <main className="p-4 sm:p-8 max-w-5xl mx-auto">
+          {/* Header y Filtros */}
+          <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-              <h1 className="text-3xl font-bold" style={{ color: theme.text_color }}>Mis Categorías Maestras</h1>
-              <p className="text-muted-foreground mt-1">Análisis de gastos por grupo para {MONTHS[selectedMonth].label}</p>
+              <h1 className="text-3xl font-bold text-white">Categorías Maestras</h1>
+              <p className="text-zinc-500 mt-1">Análisis detallado de {MONTHS[selectedMonth].label}</p>
             </div>
 
-            <div className="flex items-center gap-2 bg-zinc-900/50 border border-zinc-800 p-2 rounded-xl">
+            <div className="flex items-center gap-2 bg-zinc-900 border border-white/5 p-2 rounded-xl">
               <CalendarIcon className="h-4 w-4 text-emerald-500 ml-1" />
               <select 
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="bg-transparent border-none outline-none font-medium text-sm text-white cursor-pointer"
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="bg-transparent text-sm font-medium text-white outline-none cursor-pointer"
               >
-                {MONTHS.map((m) => (
-                  <option key={m.value} value={m.value} className="bg-zinc-900">{m.label}</option>
-                ))}
+                {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-zinc-900">{m.label}</option>)}
               </select>
               <select 
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="bg-transparent border-none outline-none font-medium text-sm text-white cursor-pointer border-l border-zinc-700 pl-2"
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="bg-transparent text-sm font-medium text-white outline-none cursor-pointer border-l border-white/10 pl-2"
               >
-                {[2024, 2025, 2026].map((y) => (
-                  <option key={y} value={y} className="bg-zinc-900">{y}</option>
-                ))}
+                {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-zinc-900">{y}</option>)}
               </select>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-20 gap-4">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
-              <p className="text-zinc-500 text-sm">Clasificando tus gastos...</p>
-            </div>
-          ) : grupos.length === 0 ? (
-            <div className="bg-zinc-900/30 border border-dashed border-zinc-800 rounded-3xl p-20 text-center">
-              <ShoppingBag className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
-              <p className="text-zinc-500">No se encontraron gastos categorizados en este periodo.</p>
-            </div>
+            <div className="flex justify-center p-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div></div>
           ) : (
-            <div className="grid gap-6">
+            <div className="grid gap-4">
               {grupos.map((grupo, i) => (
-                <div key={i} className="flex flex-col overflow-hidden rounded-3xl border border-white/5 shadow-sm transition-all" style={{ backgroundColor: theme.card_color || "#121212" }}>
+                <div key={i} className="rounded-3xl border border-white/5 overflow-hidden transition-all" style={{ backgroundColor: theme.card_color || "#121212" }}>
                   
-                  {/* Cabecera de la Tarjeta */}
+                  {/* Tarjeta Principal */}
                   <div 
-                    onClick={() => toggleExpand(i)}
-                    className="p-6 flex flex-col md:flex-row items-center gap-6 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                    onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                    className="p-6 flex flex-col md:flex-row items-center gap-6 cursor-pointer hover:bg-white/[0.02]"
                   >
-                    <div className="h-16 w-16 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                      <grupo.icon className="h-8 w-8" />
+                    <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                      <grupo.icon className="h-7 w-7" />
                     </div>
 
                     <div className="flex-1 text-center md:text-left">
-                      <h3 className="text-xl font-bold" style={{ color: theme.text_color }}>{grupo.nombre}</h3>
-                      <p className="text-sm text-zinc-500">{grupo.desc}</p>
+                      <h3 className="text-lg font-bold text-white">{grupo.nombre}</h3>
+                      <p className="text-xs text-zinc-500">{grupo.desc}</p>
                     </div>
 
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest">Total Gasto</p>
-                        <p className="text-xl font-black text-emerald-500">${grupo.total.toLocaleString()}</p>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-tighter">Total</p>
+                        <p className="text-lg font-black text-emerald-500">${grupo.total.toLocaleString()}</p>
                       </div>
-                      {expandedIndex === i ? <ChevronUp className="h-6 w-6 text-zinc-600" /> : <ChevronDown className="h-6 w-6 text-zinc-600" />}
+                      {expandedIndex === i ? <ChevronUp className="h-5 w-5 text-zinc-600" /> : <ChevronDown className="h-5 w-5 text-zinc-600" />}
                     </div>
                   </div>
 
-                  {/* Sección Desplegable */}
+                  {/* DESGLOSE (Corregido para legibilidad) */}
                   {expandedIndex === i && (
-                    <div className="px-6 pb-6 pt-2 border-t border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="bg-black/20 rounded-2xl p-4 space-y-3">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-4">Desglose de etiquetas</p>
+                    <div className="px-6 pb-6 pt-2 border-t border-white/5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="bg-black/40 rounded-2xl p-4 space-y-2 shadow-inner">
+                        <p className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-3 ml-1">Etiquetas detectadas</p>
                         {Object.entries(grupo.desglose).map(([tag, monto]: [any, any], idx) => (
-                          <div key={idx} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
-                            <span className="text-sm font-medium text-zinc-400 capitalize">{tag}</span>
-                            <span className="text-sm font-bold text-zinc-200">${monto.toLocaleString()}</span>
+                          <div key={idx} className="flex justify-between items-center py-3 px-4 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors">
+                            <span className="text-sm font-medium text-zinc-200 capitalize">{tag}</span>
+                            <span className="text-sm font-bold text-white bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/20">
+                              ${monto.toLocaleString()}
+                            </span>
                           </div>
                         ))}
                       </div>
