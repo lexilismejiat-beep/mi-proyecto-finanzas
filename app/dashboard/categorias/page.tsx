@@ -48,7 +48,7 @@ export default function CategoriasPage() {
   const [profile, setProfile] = useState<any>(null)
   const [grupos, setGrupos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null) // Control de despliegue
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   
   const supabase = createClient()
   const { theme } = useThemeSettings()
@@ -60,10 +60,18 @@ export default function CategoriasPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
+        // --- ANEXO DE LÓGICA DE PERFIL (Foto y Datos) ---
         const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
+        const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
         
         if (profileData) {
-          setProfile(profileData)
+          // Combinamos los datos para asegurar la foto del TopBar
+          const fullProfile = { 
+            ...profileData, 
+            avatar_url: mainProfile?.avatar_url || profileData.avatar_url 
+          }
+          setProfile(fullProfile)
+
           const { data: transData } = await supabase
             .from("transacciones")
             .select("categoria, monto")
@@ -114,7 +122,11 @@ export default function CategoriasPage() {
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} sidebarColor={theme.sidebar_color} />
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} avatarUrl={profile?.avatar_url} onMenuClick={() => setMobileSidebarOpen(true)} />
+        <TopBar 
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url} // Ahora recibe la URL correctamente
+          onMenuClick={() => setMobileSidebarOpen(true)} 
+        />
 
         <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
           <div className="mb-10 flex justify-between items-end">
