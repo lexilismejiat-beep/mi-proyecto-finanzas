@@ -5,35 +5,34 @@ import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Plus, Wallet, Car, Utensils, Zap, Heart, CreditCard, ShoppingBag, ChevronRight } from "lucide-react"
+import { Plus, Wallet, Car, Utensils, Zap, Heart, CreditCard, ShoppingBag, ChevronDown, ChevronUp } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
-// Mapa de agrupación inteligente
 const GRUPOS_MAESTROS: Record<string, { icon: any, keywords: string[], desc: string }> = {
   "Alimentación": { 
     icon: Utensils, 
-    keywords: ["alimentos", "comida", "cena", "restaurante", "mercado"], 
+    keywords: ["alimentos", "comida", "cena", "restaurante", "mercado", "pizza", "hamburguesa"], 
     desc: "Gastos en comida, mercados y salidas a comer" 
   },
   "Transporte": { 
     icon: Car, 
-    keywords: ["gasolina", "tanqueo", "transporte", "uber", "moto", "taller"], 
+    keywords: ["gasolina", "tanqueo", "transporte", "uber", "moto", "taller", "pasaje"], 
     desc: "Combustible, mantenimiento y transporte público" 
   },
   "Servicios y Pagos": { 
     icon: Zap, 
-    keywords: ["servicios", "nomina", "prestamo", "luz", "agua", "internet", "tigo"], 
+    keywords: ["servicios", "nomina", "prestamo", "luz", "agua", "internet", "tigo", "arriendo"], 
     desc: "Pagos fijos, servicios públicos y obligaciones" 
   },
   "Cuidado Personal": { 
     icon: Heart, 
-    keywords: ["corte de cabello", "drogueria", "salud", "farmacia", "belleza"], 
+    keywords: ["corte de cabello", "drogueria", "salud", "farmacia", "belleza", "gimnasio"], 
     desc: "Salud, higiene y cuidado personal" 
   },
   "Finanzas": { 
     icon: CreditCard, 
-    keywords: ["cuota tarjeta", "trading", "banco", "intereses", "ahorro"], 
+    keywords: ["cuota tarjeta", "trading", "banco", "intereses", "ahorro", "inversion"], 
     desc: "Movimientos bancarios y de inversión" 
   },
   "Otros": { 
@@ -49,6 +48,7 @@ export default function CategoriasPage() {
   const [profile, setProfile] = useState<any>(null)
   const [grupos, setGrupos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null) // Control de despliegue
   
   const supabase = createClient()
   const { theme } = useThemeSettings()
@@ -64,29 +64,25 @@ export default function CategoriasPage() {
         
         if (profileData) {
           setProfile(profileData)
-          
-          // Traer todas las transacciones para agrupar sus categorías
           const { data: transData } = await supabase
             .from("transacciones")
             .select("categoria, monto")
             .eq("user_id", profileData.cedula)
 
-          // Agrupación lógica
           const mapping: Record<string, any> = {}
-          
-          // Inicializar grupos maestros
           Object.keys(GRUPOS_MAESTROS).forEach(key => {
-            mapping[key] = { ...GRUPOS_MAESTROS[key], nombre: key, total: 0, subcategorias: new Set() }
+            mapping[key] = { ...GRUPOS_MAESTROS[key], nombre: key, total: 0, desglose: {} }
           })
 
           transData?.forEach(t => {
             const catLower = t.categoria?.toLowerCase() || ""
+            const nombreOriginal = t.categoria || "Sin etiqueta"
             let asignado = false
 
             for (const [grupo, info] of Object.entries(GRUPOS_MAESTROS)) {
               if (info.keywords.some(k => catLower.includes(k))) {
                 mapping[grupo].total += t.monto || 0
-                mapping[grupo].subcategorias.add(t.categoria)
+                mapping[grupo].desglose[nombreOriginal] = (mapping[grupo].desglose[nombreOriginal] || 0) + t.monto
                 asignado = true
                 break
               }
@@ -94,11 +90,11 @@ export default function CategoriasPage() {
 
             if (!asignado) {
               mapping["Otros"].total += t.monto || 0
-              mapping["Otros"].subcategorias.add(t.categoria)
+              mapping["Otros"].desglose[nombreOriginal] = (mapping["Otros"].desglose[nombreOriginal] || 0) + t.monto
             }
           })
 
-          setGrupos(Object.values(mapping).filter(g => g.subcategorias.size > 0))
+          setGrupos(Object.values(mapping).filter(g => g.total > 0))
         }
       } catch (err) {
         console.error(err)
@@ -108,6 +104,10 @@ export default function CategoriasPage() {
     }
     processCategorias()
   }, [supabase])
+
+  const toggleExpand = (index: number) => {
+    setExpandedIndex(expandedIndex === index ? null : index)
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: theme.background_color || "#F8FAFC" }}>
@@ -120,11 +120,8 @@ export default function CategoriasPage() {
           <div className="mb-10 flex justify-between items-end">
             <div>
               <h1 className="text-3xl font-bold" style={{ color: theme.text_color }}>Mis Categorías Maestras</h1>
-              <p className="text-muted-foreground mt-1">Hemos agrupado tus {grupos.reduce((acc, g) => acc + g.subcategorias.size, 0)} etiquetas en grupos inteligentes.</p>
+              <p className="text-muted-foreground mt-1">Pulsa en una categoría para ver el desglose detallado.</p>
             </div>
-            <Button style={{ backgroundColor: theme.primary_color }} className="rounded-full shadow-lg">
-              <Plus className="h-5 w-5 mr-2" /> Nueva Categoría
-            </Button>
           </div>
 
           {loading ? (
@@ -132,30 +129,45 @@ export default function CategoriasPage() {
           ) : (
             <div className="grid gap-6">
               {grupos.map((grupo, i) => (
-                <div key={i} className="group bg-white rounded-3xl border border-slate-100 p-6 flex flex-col md:flex-row items-center gap-6 hover:shadow-xl transition-all cursor-pointer" style={{ backgroundColor: theme.card_color }}>
-                  <div className="h-16 w-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <grupo.icon className="h-8 w-8" />
-                  </div>
+                <div key={i} className="flex flex-col overflow-hidden bg-white rounded-3xl border border-slate-100 shadow-sm transition-all" style={{ backgroundColor: theme.card_color }}>
+                  
+                  {/* Cabecera de la Tarjeta (Clickable) */}
+                  <div 
+                    onClick={() => toggleExpand(i)}
+                    className="p-6 flex flex-col md:flex-row items-center gap-6 cursor-pointer hover:bg-slate-50/50 transition-colors"
+                  >
+                    <div className="h-16 w-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <grupo.icon className="h-8 w-8" />
+                    </div>
 
-                  <div className="flex-1 text-center md:text-left">
-                    <h3 className="text-xl font-bold" style={{ color: theme.text_color }}>{grupo.nombre}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{grupo.desc}</p>
-                    <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                      {Array.from(grupo.subcategorias).map((sub: any, idx) => (
-                        <span key={idx} className="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200">
-                          {sub}
-                        </span>
-                      ))}
+                    <div className="flex-1 text-center md:text-left">
+                      <h3 className="text-xl font-bold" style={{ color: theme.text_color }}>{grupo.nombre}</h3>
+                      <p className="text-sm text-muted-foreground">{grupo.desc}</p>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Total</p>
+                        <p className="text-xl font-black text-emerald-600">${grupo.total.toLocaleString()}</p>
+                      </div>
+                      {expandedIndex === i ? <ChevronUp className="h-6 w-6 text-slate-400" /> : <ChevronDown className="h-6 w-6 text-slate-400" />}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Total Gastado</p>
-                      <p className="text-xl font-black text-emerald-600">${grupo.total.toLocaleString()}</p>
+                  {/* Sección Desplegable */}
+                  {expandedIndex === i && (
+                    <div className="px-6 pb-6 pt-2 border-t border-slate-50 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="bg-slate-50/50 rounded-2xl p-4 space-y-3">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Etiquetas detectadas</p>
+                        {Object.entries(grupo.desglose).map(([tag, monto]: [any, any], idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
+                            <span className="text-sm font-medium text-slate-600 capitalize">{tag}</span>
+                            <span className="text-sm font-bold text-slate-900">${monto.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <ChevronRight className="h-6 w-6 text-slate-300 group-hover:text-emerald-500 transition-colors" />
-                  </div>
+                  )}
                 </div>
               ))}
             </div>
