@@ -6,13 +6,16 @@ import { TopBar } from "@/components/dashboard/top-bar"
 import { TransactionsTable } from "@/components/dashboard/transactions-table"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Plus, Loader2, Calendar } from "lucide-react"
+import { Plus, Loader2, Calendar as CalendarIcon } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+
+// Importaciones de date-fns (Igual que en Reportes)
+import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -30,7 +33,7 @@ export default function TransaccionesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Estados del Filtro
+  // Estados para el Filtro Mensual
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -44,6 +47,7 @@ export default function TransaccionesPage() {
   const supabase = createClient()
   const { theme } = useThemeSettings()
 
+  // Carga de Perfil idéntica a Reportes
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -68,22 +72,31 @@ export default function TransaccionesPage() {
     setIsSaving(true)
     try {
       const montoNumerico = parseFloat(nuevaTrans.monto)
+      
       const { error } = await supabase.from("transacciones").insert([{
-        user_id: profile?.cedula,
+        user_id: profile?.cedula || (await supabase.auth.getUser()).data.user?.id,
         descripcion: nuevaTrans.descripcion,
         monto: montoNumerico,
         categoria: nuevaTrans.categoria || "Otros",
-        fecha: nuevaTrans.fecha,
+        // Usamos la fecha seleccionada en el modal, pero Supabase llenará created_at automáticamente
+        fecha: nuevaTrans.fecha, 
         tipo: montoNumerico >= 0 ? "Ingreso" : "Egreso"
       }])
 
       if (error) throw error
+
       toast.success("¡Transacción guardada!")
+      setNuevaTrans({
+        descripcion: "", monto: "", categoria: "",
+        fecha: new Date().toISOString().split('T')[0]
+      })
       setIsModalOpen(false)
-      // Recarga suave para ver cambios
-      window.location.reload()
+      
+      // Recarga para refrescar datos
+      setTimeout(() => { window.location.reload() }, 500)
+
     } catch (error: any) {
-      toast.error("Error: " + error.message)
+      toast.error("Error al guardar: " + error.message)
     } finally {
       setIsSaving(false)
     }
@@ -110,16 +123,16 @@ export default function TransaccionesPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {/* Filtro Mensual */}
+              {/* SELECTOR DE MES (Lógica conectada) */}
               <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 p-2 rounded-lg">
-                <Calendar className="h-4 w-4 text-emerald-500 ml-1" />
+                <CalendarIcon className="h-4 w-4 text-emerald-500 ml-1" />
                 <select 
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                   className="bg-transparent border-none outline-none font-medium text-sm text-white cursor-pointer"
                 >
-                  {MONTHS.map((m) => (
-                    <option key={m.value} value={m.value} className="bg-zinc-900">{m.label}</option>
+                  {MONTHS.map((month) => (
+                    <option key={month.value} value={month.value} className="bg-zinc-900">{month.label}</option>
                   ))}
                 </select>
                 <select 
@@ -127,8 +140,8 @@ export default function TransaccionesPage() {
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                   className="bg-transparent border-none outline-none font-medium text-sm text-white cursor-pointer border-l border-zinc-700 pl-2"
                 >
-                  {[2024, 2025, 2026].map((y) => (
-                    <option key={y} value={y} className="bg-zinc-900">{y}</option>
+                  {[2024, 2025, 2026].map((year) => (
+                    <option key={year} value={year} className="bg-zinc-900">{year}</option>
                   ))}
                 </select>
               </div>
@@ -140,14 +153,16 @@ export default function TransaccionesPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-[#121212] border-zinc-800 text-white sm:max-w-[425px]">
-                  <DialogHeader><DialogTitle className="text-emerald-500 text-xl font-bold">Agregar Movimiento</DialogTitle></DialogHeader>
+                  <DialogHeader>
+                    <DialogTitle className="text-emerald-500 text-xl font-bold">Agregar Movimiento</DialogTitle>
+                  </DialogHeader>
                   <div className="grid gap-6 py-4">
                     <div className="space-y-2">
-                      <Label>Descripción</Label>
+                      <Label className="text-zinc-300">Descripción</Label>
                       <Input className="bg-zinc-900 border-zinc-700" value={nuevaTrans.descripcion} onChange={(e) => setNuevaTrans({...nuevaTrans, descripcion: e.target.value})} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Monto</Label>
+                      <Label className="text-zinc-300">Monto (Negativo para gastos)</Label>
                       <Input type="number" className="bg-zinc-900 border-zinc-700" value={nuevaTrans.monto} onChange={(e) => setNuevaTrans({...nuevaTrans, monto: e.target.value})} />
                     </div>
                   </div>
@@ -159,6 +174,7 @@ export default function TransaccionesPage() {
             </div>
           </div>
 
+          {/* TABLA CONECTADA A LOS ESTADOS */}
           <TransactionsTable 
             cardColor={theme.card_color} 
             textColor={theme.text_color} 
