@@ -10,6 +10,16 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
+// Lista de meses para el filtro
+const MONTHS = [
+  { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
+  { value: 2, label: "Marzo" }, { value: 3, label: "Abril" },
+  { value: 4, label: "Mayo" }, { value: 5, label: "Junio" },
+  { value: 6, label: "Julio" }, { value: 7, label: "Agosto" },
+  { value: 8, label: "Septiembre" }, { value: 9, label: "Octubre" },
+  { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
+]
+
 export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -17,6 +27,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
+  // ESTADO PARA EL FILTRO: Por defecto, el mes actual
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+
   const supabase = createClient()
   const { theme } = useThemeSettings()
 
@@ -27,7 +41,6 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // Traemos todos los campos, incluyendo 'background_image' que vimos en tu captura de Supabase
         const { data: profileData } = await supabase
           .from("profiles")
           .select("*")
@@ -37,10 +50,16 @@ export default function DashboardPage() {
         if (profileData) {
           setProfile(profileData)
           if (profileData.cedula) {
+            // Definimos el rango de fechas para el mes seleccionado
+            const firstDay = new Date(selectedYear, selectedMonth, 1).toISOString()
+            const lastDay = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
+
             const { data: transData } = await supabase
               .from("transacciones")
-              .select("monto, tipo")
-              .eq("user_id", profileData.cedula) 
+              .select("monto, tipo, fecha")
+              .eq("user_id", profileData.cedula)
+              .gte("fecha", firstDay) // Mayor o igual al primer día del mes
+              .lte("fecha", lastDay)  // Menor o igual al último día del mes
 
             if (transData) {
               const income = transData
@@ -52,6 +71,8 @@ export default function DashboardPage() {
                 .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
 
               setTotals({ income, expenses, balance: income - expenses })
+            } else {
+              setTotals({ income: 0, expenses: 0, balance: 0 })
             }
           }
         }
@@ -62,18 +83,17 @@ export default function DashboardPage() {
       }
     }
     fetchData()
-  }, [supabase])
+    // Se vuelve a ejecutar cada vez que el mes o el año cambian
+  }, [supabase, selectedMonth, selectedYear])
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">
-        <p className="animate-pulse text-lg">Cargando tus finanzas...</p>
+        <p className="animate-pulse text-lg">Actualizando datos mensuales...</p>
       </div>
     )
   }
 
-  // Priorizamos la imagen que viene directamente del perfil (Supabase) 
-  // o la del contexto de tema si la tienes ahí.
   const backgroundImage = profile?.background_image || theme.background_image
 
   return (
@@ -106,10 +126,43 @@ export default function DashboardPage() {
 
         <main className="flex-1 p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden bg-transparent">
           
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold" style={{ color: theme.text_color || '#1e293b' }}>
-              Resumen Financiero
-            </h2>
+          <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-bold" style={{ color: theme.text_color || '#1e293b' }}>
+                Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
+              </h2>
+              <p className="text-sm opacity-70" style={{ color: theme.text_color }}>
+                Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              </p>
+            </div>
+
+            {/* FILTRO DE MES */}
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/20">
+              <select 
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                className="bg-transparent border-none outline-none font-medium cursor-pointer"
+                style={{ color: theme.text_color || '#1e293b' }}
+              >
+                {MONTHS.map((month) => (
+                  <option key={month.value} value={month.value} className="text-black">
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <select 
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="bg-transparent border-none outline-none font-medium cursor-pointer"
+                style={{ color: theme.text_color || '#1e293b' }}
+              >
+                {[2024, 2025, 2026].map((year) => (
+                  <option key={year} value={year} className="text-black">
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="mb-8 w-full">
@@ -124,16 +177,17 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3 w-full">
-            {/* 1. Transacciones Recientes (Primero en móvil) */}
             <div className="lg:col-span-2 order-1 overflow-hidden">
               <TransactionsTable 
                 cardColor={theme.card_color} 
                 textColor={theme.text_color} 
-                userCedula={profile?.cedula} 
+                userCedula={profile?.cedula}
+                // Importante: Pasa los filtros a la tabla también para que coincidan
+                selectedMonth={selectedMonth}
+                selectedYear={selectedYear}
               />
             </div>
 
-            {/* 2. Identidad Financiera (Segundo en móvil) */}
             <div className="lg:col-span-1 order-2">
               <CedulaSection 
                 profile={profile} 
