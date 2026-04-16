@@ -27,6 +27,7 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
+        // Traemos todos los campos, incluyendo 'background_image' que vimos en tu captura de Supabase
         const { data: profileData } = await supabase
           .from("profiles")
           .select("*")
@@ -71,13 +72,16 @@ export default function DashboardPage() {
     )
   }
 
+  // Priorizamos la imagen que viene directamente del perfil (Supabase) 
+  // o la del contexto de tema si la tienes ahí.
+  const backgroundImage = profile?.background_image || theme.background_image
+
   return (
     <div 
-      className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed" 
+      className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed transition-all duration-500" 
       style={{ 
-        // Si hay imagen en Supabase, la pone. Si no, usa blanco por defecto.
-        backgroundImage: theme.background_image ? `url(${theme.background_image})` : 'none',
-        backgroundColor: theme.background_image ? 'transparent' : '#FFFFFF'
+        backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+        backgroundColor: backgroundImage ? 'transparent' : '#FFFFFF' 
       }}
     >
       <Sidebar 
@@ -100,11 +104,10 @@ export default function DashboardPage() {
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        {/* El fondo de main es transparente para dejar ver el fondo de la página */}
         <main className="flex-1 p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden bg-transparent">
           
           <div className="mb-8">
-            <h2 className="text-3xl font-bold" style={{ color: theme.text_color }}>
+            <h2 className="text-3xl font-bold" style={{ color: theme.text_color || '#1e293b' }}>
               Resumen Financiero
             </h2>
           </div>
@@ -114,7 +117,6 @@ export default function DashboardPage() {
               totalIncome={totals.income} 
               totalExpenses={totals.expenses} 
               currentBalance={totals.balance}
-              // Mantenemos los colores de las tarjetas según tu configuración (blanco por defecto)
               cardColor={theme.card_color} 
               textColor={theme.text_color} 
               primaryColor={theme.primary_color} 
@@ -122,8 +124,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3 w-full">
-            
-            {/* Transacciones primero en móvil (order-1) */}
+            {/* 1. Transacciones Recientes (Primero en móvil) */}
             <div className="lg:col-span-2 order-1 overflow-hidden">
               <TransactionsTable 
                 cardColor={theme.card_color} 
@@ -132,7 +133,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Identidad después en móvil (order-2) */}
+            {/* 2. Identidad Financiera (Segundo en móvil) */}
             <div className="lg:col-span-1 order-2">
               <CedulaSection 
                 profile={profile} 
@@ -141,7 +142,6 @@ export default function DashboardPage() {
                 primaryColor={theme.primary_color}
               />
             </div>
-
           </div>
         </main>
       </div>
