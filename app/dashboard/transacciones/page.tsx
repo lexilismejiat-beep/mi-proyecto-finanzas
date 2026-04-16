@@ -23,15 +23,23 @@ export default function TransaccionesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Obtenemos TODO el perfil de user_profiles para asegurar que avatar_url esté presente
-      const { data: profileData, error } = await supabase
+      // 1. Obtenemos datos de user_profiles
+      const { data: profileData } = await supabase
         .from("user_profiles")
         .select("*") 
         .eq("id", user.id)
         .single()
       
+      // 2. ANEXO: Verificamos también la tabla profiles para la foto (igual que en configuración)
+      const { data: mainProfile } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .single()
+      
       if (profileData) {
-        setProfile(profileData)
+        // Combinamos ambos para asegurar que avatar_url no falte
+        setProfile({ ...profileData, avatar_url: mainProfile?.avatar_url || profileData.avatar_url })
       }
     }
     fetchProfile()
@@ -55,9 +63,7 @@ export default function TransaccionesPage() {
         )}
       >
         <TopBar 
-          // Construimos el nombre completo desde el perfil cargado
           userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
-          // CRÍTICO: Aquí pasamos la URL de la foto que cargamos en el useEffect
           avatarUrl={profile?.avatar_url} 
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
@@ -79,7 +85,6 @@ export default function TransaccionesPage() {
             </Button>
           </div>
 
-          {/* Mantenemos tu tabla intacta para que no se pierdan los registros */}
           <TransactionsTable 
             cardColor={theme.card_color} 
             textColor={theme.text_color} 
