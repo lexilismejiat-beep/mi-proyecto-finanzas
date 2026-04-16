@@ -71,7 +71,7 @@ export default function ReportesPage() {
     }
   }
 
-  // --- FETCH DE DATOS CORREGIDO ---
+  // --- FETCH DE DATOS CON ANEXO DE PERFIL ---
   useEffect(() => {
     async function fetchData() {
       try {
@@ -79,18 +79,18 @@ export default function ReportesPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // 1. Obtener perfil
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single()
+        // 1. Obtener perfil de ambas fuentes (Doble verificación para la foto)
+        const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
+        const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
         
-        setProfile(profileData)
+        if (profileData) {
+          setProfile({
+            ...profileData,
+            avatar_url: mainProfile?.avatar_url || profileData.avatar_url
+          })
+        }
 
         // 2. Cargar transacciones
-        // IMPORTANTE: Asegúrate de si tu tabla usa 'user_id' (UUID) o la cédula.
-        // Aquí intentamos por el ID de usuario de autenticación primero, que es el estándar.
         let query = supabase
           .from("transacciones")
           .select("*")
@@ -98,8 +98,6 @@ export default function ReportesPage() {
           .lte("created_at", endOfDay(dateRange.to).toISOString())
           .order("created_at", { ascending: false })
 
-        // Filtro condicional: Si tu tabla usa la cédula como vínculo, usa profileData.cedula
-        // Si usa el ID de Auth, usa user.id. Ajusta según tu DB:
         if (profileData?.cedula) {
             query = query.eq("user_id", profileData.cedula) 
         } else {
@@ -107,7 +105,6 @@ export default function ReportesPage() {
         }
 
         const { data: transData, error } = await query
-
         if (error) throw error
         setTransactions(transData || [])
 
@@ -159,7 +156,11 @@ export default function ReportesPage() {
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar userName={profile?.full_name || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
+        <TopBar 
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url} // <--- Foto conectada
+          onMenuClick={() => setMobileSidebarOpen(true)} 
+        />
 
         <main className="p-6 space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
