@@ -28,33 +28,41 @@ export default function DashboardPage() {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
         
-        // CORRECCIÓN: Si no hay usuario, mandamos al login de tu dominio
         if (!user) {
           router.push("/auth/login")
           return
         }
 
-        // 1. Verificar si el registro está completo en la tabla user_profiles
-        const { data: profileData, error: profileError } = await supabase
+        // 1. CONSULTA COMBINADA: Traemos datos de user_profiles y de profiles (avatar_url)
+        // Usamos la relación por el campo 'id' que comparten ambas tablas
+        const { data: profileData } = await supabase
           .from("user_profiles") 
-          .select("*")
+          .select(`
+            *,
+            profiles:id (avatar_url)
+          `)
           .eq("id", user.id)
           .maybeSingle()
         
-        // Si no hay perfil o no ha completado el registro, lo mandamos a /registro
         if (!profileData || !profileData.registration_complete) {
           router.push("/registro")
           return
         }
 
-        setProfile(profileData)
+        // Aplanamos el objeto para que avatar_url esté al mismo nivel
+        const mergedProfile = {
+          ...profileData,
+          avatar_url: profileData.profiles?.avatar_url
+        }
 
-        // 2. Cálculo de finanzas usando la cédula como user_id
-        if (profileData.cedula) {
+        setProfile(mergedProfile)
+
+        // 2. Cálculo de finanzas usando la cédula
+        if (mergedProfile.cedula) {
           const { data: transData } = await supabase
             .from("transacciones")
             .select("monto, tipo")
-            .eq("user_id", profileData.cedula) 
+            .eq("user_id", mergedProfile.cedula) 
 
           if (transData) {
             const income = transData
@@ -104,8 +112,8 @@ export default function DashboardPage() {
         sidebarCollapsed && "lg:ml-16"
       )}>
         <TopBar 
-          userName={profile?.nombres || "Usuario"} 
-          avatarUrl={profile?.avatar_url}
+          userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url} // <--- ¡AQUÍ APARECERÁ TU FOTO!
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
@@ -114,8 +122,10 @@ export default function DashboardPage() {
             <h2 className="text-3xl font-bold" style={{ color: theme.text_color }}>
               Resumen Financiero
             </h2>
+            <p className="text-muted-foreground">Bienvenido de nuevo, {profile?.nombres}</p>
           </div>
 
+          {/* Resto del contenido igual que antes... */}
           <div className="mb-8">
             <StatsCards 
               totalIncome={totals.income} 
