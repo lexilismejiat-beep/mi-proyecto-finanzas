@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Pencil, Trash2, Bell, Calendar, Clock, 
   AlertCircle, CheckCircle2, Loader2, BellRing, Send,
-  MessageCircle // El icono de WhatsApp
+  MessageCircle 
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, differenceInDays, parseISO } from "date-fns"
@@ -111,6 +111,7 @@ function ModalRecordatorio({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Frecuencia</Label>
+              <span className="text-white/20"></span>
               <Select name="frecuencia" defaultValue={editData?.frecuencia || "Mensual"}>
                 <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-[#121212] border-white/10 text-white">
@@ -150,14 +151,25 @@ export default function RecordatoriosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // CONSULTA A LA TABLA CORRECTA: user_profiles
+      // --- ANEXO: FETCH DOBLE PARA PERFIL Y FOTO ---
       const { data: profileData } = await supabase
         .from("user_profiles")
-        .select("cedula, nombres, telefono, telegram_id")
+        .select("*")
         .eq("id", user.id)
         .single()
       
-      setProfile(profileData)
+      const { data: mainProfile } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .single()
+      
+      if (profileData) {
+        setProfile({
+          ...profileData,
+          avatar_url: mainProfile?.avatar_url || profileData.avatar_url
+        })
+      }
 
       if (profileData?.cedula) {
         const { data } = await supabase
@@ -209,7 +221,6 @@ export default function RecordatoriosPage() {
 
     setIsTestingWhatsApp(true);
     try {
-      // Enviamos el tipo whatsapp y opcionalmente el teléfono si tu función lo requiere
       const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${profile.telefono}&t=${Date.now()}`;
       const response = await fetch(url, { method: 'GET', mode: 'cors' });
       
@@ -265,7 +276,11 @@ export default function RecordatoriosPage() {
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
       
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar userName={profile?.nombres || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
+        <TopBar 
+          userName={profile ? `${profile.nombres}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url} // <--- Foto conectada
+          onMenuClick={() => setMobileSidebarOpen(true)} 
+        />
         
         <main className="p-4 sm:p-8 space-y-6 max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -275,7 +290,6 @@ export default function RecordatoriosPage() {
             </div>
             
             <div className="flex items-center gap-2">
-              {/* BOTÓN WHATSAPP CON LOGO CORRECTO */}
               <Button 
                 variant="outline" 
                 onClick={handleTestWhatsApp}
@@ -304,7 +318,6 @@ export default function RecordatoriosPage() {
             </div>
           </div>
 
-          {/* CARD DE RESUMEN */}
           <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
             <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4">
@@ -329,7 +342,6 @@ export default function RecordatoriosPage() {
             </CardContent>
           </Card>
 
-          {/* LISTADO DE RECORDATORIOS */}
           <div className="grid gap-4">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                 <Clock size={14} /> Calendario de Pagos
