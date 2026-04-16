@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
-// Importamos un diálogo para el formulario manual
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,7 +20,6 @@ export default function TransaccionesPage() {
   const [profile, setProfile] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
-  // Estado para la nueva transacción manual
   const [nuevaTrans, setNuevaTrans] = useState({
     descripcion: "",
     monto: "",
@@ -46,16 +44,15 @@ export default function TransaccionesPage() {
     fetchProfile()
   }, [supabase])
 
-  // Función para guardar la transferencia manual
   const handleGuardarManual = async () => {
     try {
       if (!nuevaTrans.descripcion || !nuevaTrans.monto) {
-        toast.error("Llena los campos básicos")
+        toast.error("Por favor, llena la descripción y el monto")
         return
       }
 
       const { error } = await supabase.from("transacciones").insert([{
-        user_id: profile?.cedula, // Usamos la cédula como vinculación
+        user_id: profile?.cedula,
         descripcion: nuevaTrans.descripcion,
         monto: parseFloat(nuevaTrans.monto),
         categoria: nuevaTrans.categoria || "Manual",
@@ -65,17 +62,24 @@ export default function TransaccionesPage() {
 
       if (error) throw error
 
-      toast.success("Transacción agregada correctamente")
+      toast.success("Transacción registrada con éxito")
       setIsModalOpen(false)
-      window.location.reload() // Recargamos para ver la nueva fila
+      setNuevaTrans({ descripcion: "", monto: "", categoria: "", fecha: new Date().toISOString().split('T')[0] })
+      window.location.reload()
     } catch (error: any) {
-      toast.error("Error al guardar: " + error.message)
+      toast.error("Error: " + error.message)
     }
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} sidebarColor={theme.sidebar_color} />
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <Sidebar 
+        collapsed={sidebarCollapsed} 
+        onCollapsedChange={setSidebarCollapsed} 
+        mobileOpen={mobileSidebarOpen} 
+        onMobileOpenChange={setMobileSidebarOpen} 
+        sidebarColor={theme.sidebar_color} 
+      />
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} avatarUrl={profile?.avatar_url} onMenuClick={() => setMobileSidebarOpen(true)} />
@@ -84,35 +88,54 @@ export default function TransaccionesPage() {
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold" style={{ color: theme.text_color }}>Transacciones</h1>
-              <p className="text-muted-foreground">Administra todas tus transacciones</p>
+              <p className="text-zinc-400">Administra tus movimientos financieros</p>
             </div>
 
-            {/* MODAL PARA NUEVA TRANSACCIÓN */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2" style={{ backgroundColor: theme.primary_color }}>
+                <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
                   <Plus className="h-4 w-4" /> Nueva Transacción
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-white rounded-2xl">
+              {/* MEJORA: Fondo oscuro y bordes para legibilidad */}
+              <DialogContent className="bg-[#121212] border-zinc-800 text-white sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>Agregar Movimiento Manual</DialogTitle>
+                  <DialogTitle className="text-emerald-500 text-xl font-bold">Agregar Movimiento Manual</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label>Descripción</Label>
-                    <Input placeholder="Ej. Pago de arriendo" value={nuevaTrans.descripcion} onChange={(e) => setNuevaTrans({...nuevaTrans, descripcion: e.target.value})} />
+                <div className="grid gap-6 py-4">
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Descripción</Label>
+                    <Input 
+                      className="bg-zinc-900 border-zinc-700 text-white focus:border-emerald-500"
+                      placeholder="Ej. Pago de arriendo" 
+                      value={nuevaTrans.descripcion} 
+                      onChange={(e) => setNuevaTrans({...nuevaTrans, descripcion: e.target.value})} 
+                    />
                   </div>
-                  <div className="grid gap-2">
-                    <Label>Monto (usa negativo para gastos)</Label>
-                    <Input type="number" placeholder="Ej. -50000" value={nuevaTrans.monto} onChange={(e) => setNuevaTrans({...nuevaTrans, monto: e.target.value})} />
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Monto (Negativo para gastos)</Label>
+                    <Input 
+                      type="number" 
+                      className="bg-zinc-900 border-zinc-700 text-white focus:border-emerald-500"
+                      placeholder="Ej. -50000" 
+                      value={nuevaTrans.monto} 
+                      onChange={(e) => setNuevaTrans({...nuevaTrans, monto: e.target.value})} 
+                    />
                   </div>
-                  <div className="grid gap-2">
-                    <Label>Categoría</Label>
-                    <Input placeholder="Ej. Hogar" value={nuevaTrans.categoria} onChange={(e) => setNuevaTrans({...nuevaTrans, categoria: e.target.value})} />
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Categoría</Label>
+                    <Input 
+                      className="bg-zinc-900 border-zinc-700 text-white focus:border-emerald-500"
+                      placeholder="Ej. Alimentación" 
+                      value={nuevaTrans.categoria} 
+                      onChange={(e) => setNuevaTrans({...nuevaTrans, categoria: e.target.value})} 
+                    />
                   </div>
                 </div>
-                <Button onClick={handleGuardarManual} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                <Button 
+                  onClick={handleGuardarManual} 
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 text-lg shadow-lg shadow-emerald-900/20"
+                >
                   Guardar Transacción
                 </Button>
               </DialogContent>
