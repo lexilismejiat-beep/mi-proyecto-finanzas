@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Plus, Tag, MessageSquare } from "lucide-react"
+import { Plus, Tag, Info, Lightbulb, Wallet } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
@@ -26,7 +26,6 @@ export default function CategoriasPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // 1. Obtener Perfil y Foto
         const { data: profileData } = await supabase
           .from("user_profiles")
           .select("*, profiles:id(avatar_url)")
@@ -34,38 +33,32 @@ export default function CategoriasPage() {
           .single()
         
         if (profileData) {
-          setProfile({
-            ...profileData,
-            avatar_url: profileData.profiles?.avatar_url
-          })
+          setProfile({ ...profileData, avatar_url: profileData.profiles?.avatar_url })
 
-          const cedula = profileData.cedula
-
-          // 2. Obtener Categorías Oficiales (de la nueva tabla)
+          // 1. Obtener categorías configuradas por el usuario (con descripción y palabras clave)
           const { data: catOficiales } = await supabase
             .from("categorias")
             .select("*")
-            .eq("user_id", cedula)
+            .eq("user_id", profileData.cedula)
 
-          // 3. Obtener Categorías de Transacciones Previas (para no perder datos viejos)
+          // 2. Escanear transacciones previas para detectar categorías usadas
           const { data: transData } = await supabase
             .from("transacciones")
             .select("categoria")
-            .eq("user_id", cedula)
+            .eq("user_id", profileData.cedula)
 
-          // Unificamos y evitamos duplicados
           const nombresOficiales = catOficiales?.map(c => c.nombre.toLowerCase()) || []
-          const transCategorias = Array.from(new Set(transData?.map(t => t.categoria?.trim()).filter(Boolean) || []))
+          const transCategoriasUnicas = Array.from(new Set(transData?.map(t => t.categoria?.trim()).filter(Boolean) || []))
 
-          // Combinamos: Las oficiales + las que existen en transacciones pero no son oficiales aún
           const listaFinal = [...(catOficiales || [])]
           
-          transCategorias.forEach(catNombre => {
+          transCategoriasUnicas.forEach(catNombre => {
             if (!nombresOficiales.includes(catNombre.toLowerCase())) {
               listaFinal.push({
                 nombre: catNombre,
-                es_temporal: true, // Marcamos que viene de una transacción vieja
-                palabras_clave: "Sin palabras clave"
+                es_temporal: true,
+                descripcion: "Categoría detectada en transacciones previas.",
+                palabras_clave: ""
               })
             }
           })
@@ -73,99 +66,88 @@ export default function CategoriasPage() {
           setCategorias(listaFinal)
         }
       } catch (err) {
-        console.error("Error cargando categorías:", err)
+        console.error("Error:", err)
       } finally {
         setLoading(false)
       }
     }
-    
     fetchAllData()
   }, [supabase])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: theme.background_color || "#F8FAFC" }}>
       <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onCollapsedChange={setSidebarCollapsed}
-        mobileOpen={mobileSidebarOpen}
-        onMobileOpenChange={setMobileSidebarOpen}
+        collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed}
+        mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen}
         sidebarColor={theme.sidebar_color}
       />
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
           userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
-          avatarUrl={profile?.avatar_url} 
-          onMenuClick={() => setMobileSidebarOpen(true)}
+          avatarUrl={profile?.avatar_url} onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="p-4 sm:p-6 lg:p-8">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold" style={{ color: theme.text_color }}>
-                Gestión de Categorías
-              </h1>
-              <p className="text-muted-foreground">Define cómo el bot clasifica tus gastos de WhatsApp</p>
+              <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: theme.text_color }}>Categorías de Gastos</h1>
+              <p className="text-muted-foreground mt-1">Organiza y analiza tus gastos personales o empresariales.</p>
             </div>
-            <Button className="gap-2 shadow-lg" style={{ backgroundColor: theme.primary_color }}>
-              <Plus className="h-4 w-4" />
-              Nueva Categoría
+            <Button className="gap-2 h-11 px-6 rounded-full shadow-md hover:scale-105 transition-transform" style={{ backgroundColor: theme.primary_color }}>
+              <Plus className="h-5 w-5" /> Nueva Categoría
             </Button>
           </div>
 
           {loading ? (
-            <div className="flex justify-center p-10">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-            </div>
+            <div className="flex justify-center p-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div></div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {categorias.length > 0 ? (
-                categorias.map((cat, index) => (
-                  <div 
-                    key={index} 
-                    className={cn(
-                      "p-6 rounded-2xl border shadow-sm transition-all hover:shadow-md relative overflow-hidden",
-                      cat.es_temporal && "border-dashed border-amber-300"
-                    )}
-                    style={{ backgroundColor: theme.card_color, color: theme.text_color }}
-                  >
-                    {cat.es_temporal && (
-                      <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-1 rounded-bl-lg font-bold">
-                        TRANSACCIÓN PREVIA
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
-                        <Tag className="h-5 w-5" />
-                      </div>
-                      <span className="font-bold text-xl capitalize">{cat.nombre}</span>
-                    </div>
+            <div className="grid gap-6">
+              {categorias.map((cat, index) => (
+                <div 
+                  key={index} 
+                  className={cn(
+                    "group p-5 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center gap-6",
+                    cat.es_temporal ? "border-dashed border-amber-200 bg-amber-50/30" : "bg-white dark:bg-slate-900 border-slate-100"
+                  )}
+                  style={{ backgroundColor: !cat.es_temporal ? theme.card_color : undefined, color: theme.text_color }}
+                >
+                  {/* Icono dinámico según el tipo */}
+                  <div className={cn(
+                    "h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
+                    cat.es_temporal ? "bg-amber-100 text-amber-600" : "bg-emerald-100 text-emerald-600"
+                  )}>
+                    {cat.es_temporal ? <Lightbulb className="h-7 w-7" /> : <Wallet className="h-7 w-7" />}
+                  </div>
 
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 uppercase tracking-wider font-semibold">
-                        <MessageSquare className="h-3 w-3" /> Palabras Clave
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {cat.palabras_clave?.split(',').map((word: string, i: number) => (
-                          <span 
-                            key={i} 
-                            className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border"
-                          >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-xl font-bold capitalize">{cat.nombre}</h3>
+                      {cat.es_temporal && (
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">Sugerida</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {cat.descripcion || "Sin descripción configurada."}
+                    </p>
+                    
+                    {/* Palabras Clave como Chips */}
+                    {cat.palabras_clave && (
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {cat.palabras_clave.split(',').map((word: string, i: number) => (
+                          <span key={i} className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
                             {word.trim()}
                           </span>
-                        )) || <span className="text-xs italic opacity-50">Ninguna configurada</span>}
+                        ))}
                       </div>
-                    </div>
+                    )}
                   </div>
-                ))
-              ) : (
-                <div className="col-span-full text-center p-16 border-2 border-dashed rounded-3xl">
-                  <p className="text-muted-foreground text-lg">
-                    Aún no tienes categorías. ¡Usa el botón "Nueva Categoría" para empezar!
-                  </p>
+
+                  <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Info className="h-4 w-4 mr-2" /> Detalles
+                  </Button>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </main>
