@@ -6,7 +6,7 @@ import { TopBar } from "@/components/dashboard/top-bar"
 import { TransactionsTable } from "@/components/dashboard/transactions-table"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -19,6 +19,7 @@ export default function TransaccionesPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   
   const [nuevaTrans, setNuevaTrans] = useState({
     descripcion: "",
@@ -34,6 +35,7 @@ export default function TransaccionesPage() {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      
       const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
       const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
       
@@ -44,30 +46,49 @@ export default function TransaccionesPage() {
     fetchProfile()
   }, [supabase])
 
+  // --- FUNCIÓN DE GUARDADO CORREGIDA ---
   const handleGuardarManual = async () => {
-    try {
-      if (!nuevaTrans.descripcion || !nuevaTrans.monto) {
-        toast.error("Por favor, llena la descripción y el monto")
-        return
-      }
+    if (!nuevaTrans.descripcion || !nuevaTrans.monto) {
+      toast.error("Debes ingresar una descripción y un monto")
+      return
+    }
 
+    setIsSaving(true)
+    try {
+      const montoNumerico = parseFloat(nuevaTrans.monto)
+      
       const { error } = await supabase.from("transacciones").insert([{
-        user_id: profile?.cedula,
+        user_id: profile?.cedula, // Vinculamos por cédula según tu base de datos
         descripcion: nuevaTrans.descripcion,
-        monto: parseFloat(nuevaTrans.monto),
-        categoria: nuevaTrans.categoria || "Manual",
+        monto: montoNumerico,
+        categoria: nuevaTrans.categoria || "Otros",
         fecha: nuevaTrans.fecha,
-        tipo: parseFloat(nuevaTrans.monto) >= 0 ? "Ingreso" : "Egreso"
+        tipo: montoNumerico >= 0 ? "Ingreso" : "Egreso"
       }])
 
       if (error) throw error
 
-      toast.success("Transacción registrada con éxito")
+      toast.success("¡Transacción guardada!")
+      
+      // Limpiar y cerrar
+      setNuevaTrans({
+        descripcion: "",
+        monto: "",
+        categoria: "",
+        fecha: new Date().toISOString().split('T')[0]
+      })
       setIsModalOpen(false)
-      setNuevaTrans({ descripcion: "", monto: "", categoria: "", fecha: new Date().toISOString().split('T')[0] })
-      window.location.reload()
+      
+      // Refrescar la tabla para ver el nuevo registro
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
+
     } catch (error: any) {
-      toast.error("Error: " + error.message)
+      console.error("Error al guardar:", error)
+      toast.error("Error al guardar: " + error.message)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -97,7 +118,6 @@ export default function TransaccionesPage() {
                   <Plus className="h-4 w-4" /> Nueva Transacción
                 </Button>
               </DialogTrigger>
-              {/* MEJORA: Fondo oscuro y bordes para legibilidad */}
               <DialogContent className="bg-[#121212] border-zinc-800 text-white sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle className="text-emerald-500 text-xl font-bold">Agregar Movimiento Manual</DialogTitle>
@@ -134,9 +154,11 @@ export default function TransaccionesPage() {
                 </div>
                 <Button 
                   onClick={handleGuardarManual} 
+                  disabled={isSaving}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 text-lg shadow-lg shadow-emerald-900/20"
                 >
-                  Guardar Transacción
+                  {isSaving ? <Loader2 className="animate-spin mr-2" /> : null}
+                  {isSaving ? "Guardando..." : "Guardar Transacción"}
                 </Button>
               </DialogContent>
             </Dialog>
