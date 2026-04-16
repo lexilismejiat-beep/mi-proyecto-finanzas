@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Plus, Tag, Wallet, Lightbulb } from "lucide-react"
+import { Plus, Wallet, Lightbulb } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 
@@ -26,7 +26,7 @@ export default function CategoriasPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // 1. Obtenemos el perfil (Igual que en tu página de Transacciones)
+        // Cargamos perfil completo (incluyendo avatar_url para el TopBar)
         const { data: profileData } = await supabase
           .from("user_profiles")
           .select("*")
@@ -37,31 +37,33 @@ export default function CategoriasPage() {
           setProfile(profileData)
           const miCedula = profileData.cedula
 
-          // 2. Buscamos Categorías Oficiales
+          // 1. Traer categorías oficiales configuradas
           const { data: catOficiales } = await supabase
             .from("categorias")
             .select("*")
             .eq("user_id", miCedula)
 
-          // 3. Escaneamos transacciones para capturar las que ya existen (Nómina, Cena, etc.)
+          // 2. Traer categorías de transacciones para agrupar
           const { data: transData } = await supabase
             .from("transacciones")
             .select("categoria")
             .eq("user_id", miCedula)
 
-          const nombresOficiales = catOficiales?.map(c => c.nombre.toLowerCase()) || []
+          // Lógica de Agrupación:
+          const nombresOficialesLower = catOficiales?.map(c => c.nombre.toLowerCase()) || []
+          const listaFinal = [...(catOficiales || [])]
+
+          // Solo agregamos de transacciones si NO existen ya en las oficiales
           const transCategoriasUnicas = Array.from(
             new Set(transData?.map(t => t.categoria?.trim()).filter(Boolean) || [])
           )
 
-          // 4. Fusionamos
-          const listaFinal = [...(catOficiales || [])]
           transCategoriasUnicas.forEach(nombre => {
-            if (!nombresOficiales.includes(nombre.toLowerCase())) {
+            if (!nombresOficialesLower.includes(nombre.toLowerCase())) {
               listaFinal.push({
                 nombre: nombre,
                 es_temporal: true,
-                descripcion: "Categoría detectada en tus registros previos"
+                descripcion: "Categoría por configurar"
               })
             }
           })
@@ -78,7 +80,7 @@ export default function CategoriasPage() {
   }, [supabase])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen" style={{ backgroundColor: theme.background_color || "#F8FAFC" }}>
       <Sidebar 
         collapsed={sidebarCollapsed} 
         onCollapsedChange={setSidebarCollapsed}
@@ -90,60 +92,64 @@ export default function CategoriasPage() {
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
           userName={profile ? `${profile.nombres} ${profile.apellidos}` : "Usuario"} 
-          avatarUrl={profile?.avatar_url} 
+          avatarUrl={profile?.avatar_url} // Asegura que use la columna de tu tabla profiles
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="p-4 sm:p-6 lg:p-8">
-          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+          <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold" style={{ color: theme.text_color }}>
-                Categorías de Gastos
+              <h1 className="text-3xl font-bold tracking-tight" style={{ color: theme.text_color }}>
+                Mis Categorías
               </h1>
-              <p className="text-muted-foreground">Vínculo: Cédula {profile?.cedula || "Cargando..."}</p>
+              <p className="text-muted-foreground mt-1">
+                Gestiona y agrupa tus etiquetas de gastos personales.
+              </p>
             </div>
-            <Button className="gap-2" style={{ backgroundColor: theme.primary_color }}>
-              <Plus className="h-4 w-4" /> Nueva Categoría
+            <Button className="rounded-xl px-6 h-12 font-semibold shadow-sm" style={{ backgroundColor: theme.primary_color }}>
+              <Plus className="h-5 w-5 mr-2" /> Nueva Categoría
             </Button>
           </div>
 
           {loading ? (
-            <div className="flex justify-center p-10">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+            <div className="flex justify-center p-20">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {categorias.length > 0 ? (
-                categorias.map((cat, i) => (
-                  <div 
-                    key={i} 
-                    className={cn(
-                      "p-5 rounded-2xl border transition-all hover:shadow-md",
-                      cat.es_temporal ? "border-dashed border-slate-300 opacity-80" : "border-slate-100 shadow-sm"
-                    )}
-                    style={{ backgroundColor: theme.card_color, color: theme.text_color }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "h-12 w-12 rounded-xl flex items-center justify-center",
-                        cat.es_temporal ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-600"
-                      )}>
-                        {cat.es_temporal ? <Lightbulb className="h-6 w-6" /> : <Wallet className="h-6 w-6" />}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {categorias.map((cat, i) => (
+                <div 
+                  key={i} 
+                  className={cn(
+                    "group p-6 rounded-3xl border transition-all duration-200 hover:shadow-lg",
+                    cat.es_temporal ? "border-dashed border-slate-200 bg-slate-50/50" : "border-slate-100 shadow-sm"
+                  )}
+                  style={{ backgroundColor: !cat.es_temporal ? theme.card_color : undefined, color: theme.text_color }}
+                >
+                  <div className="flex flex-col gap-4">
+                    <div className={cn(
+                      "h-14 w-14 rounded-2xl flex items-center justify-center shadow-sm",
+                      cat.es_temporal ? "bg-white text-slate-400" : "bg-emerald-50 text-emerald-600"
+                    )}>
+                      {cat.es_temporal ? <Lightbulb className="h-7 w-7" /> : <Wallet className="h-7 w-7" />}
+                    </div>
+                    
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-xl capitalize leading-none">{cat.nombre}</h3>
+                        {cat.es_temporal && (
+                          <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                            Nuevo
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <h3 className="font-bold text-lg capitalize">{cat.nombre}</h3>
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {cat.es_temporal ? "Pendiente por configurar" : (cat.descripcion || "Sin descripción")}
-                        </p>
-                      </div>
+                      <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                        {cat.descripcion || "Sin descripción asignada."}
+                      </p>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="col-span-full text-center p-12 border-2 border-dashed rounded-2xl">
-                   No se encontraron categorías para la cédula {profile?.cedula}
                 </div>
-              )}
+              ))}
             </div>
           )}
         </main>
