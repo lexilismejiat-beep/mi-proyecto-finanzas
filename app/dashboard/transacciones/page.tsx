@@ -6,7 +6,7 @@ import { TopBar } from "@/components/dashboard/top-bar"
 import { TransactionsTable } from "@/components/dashboard/transactions-table"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Plus, Loader2, Calendar } from "lucide-react" // Añadí Calendar
+import { Plus, Loader2, Calendar } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 
-// Lista de meses para el filtro
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
   { value: 2, label: "Marzo" }, { value: 3, label: "Abril" },
@@ -31,7 +30,7 @@ export default function TransaccionesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // --- NUEVOS ESTADOS PARA EL FILTRO ---
+  // Estados del Filtro
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -69,7 +68,6 @@ export default function TransaccionesPage() {
     setIsSaving(true)
     try {
       const montoNumerico = parseFloat(nuevaTrans.monto)
-      
       const { error } = await supabase.from("transacciones").insert([{
         user_id: profile?.cedula,
         descripcion: nuevaTrans.descripcion,
@@ -80,23 +78,12 @@ export default function TransaccionesPage() {
       }])
 
       if (error) throw error
-
       toast.success("¡Transacción guardada!")
-      setNuevaTrans({
-        descripcion: "",
-        monto: "",
-        categoria: "",
-        fecha: new Date().toISOString().split('T')[0]
-      })
       setIsModalOpen(false)
-      
-      setTimeout(() => {
-        window.location.reload()
-      }, 500)
-
+      // Recarga suave para ver cambios
+      window.location.reload()
     } catch (error: any) {
-      console.error("Error al guardar:", error)
-      toast.error("Error al guardar: " + error.message)
+      toast.error("Error: " + error.message)
     } finally {
       setIsSaving(false)
     }
@@ -122,29 +109,26 @@ export default function TransaccionesPage() {
               <p className="text-zinc-400">Administra tus movimientos financieros</p>
             </div>
 
-            {/* --- CONTENEDOR DE FILTROS Y BOTÓN --- */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* SELECTOR DE MES Y AÑO */}
+              {/* Filtro Mensual */}
               <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 p-2 rounded-lg">
                 <Calendar className="h-4 w-4 text-emerald-500 ml-1" />
                 <select 
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  className="bg-transparent border-none outline-none font-medium text-sm cursor-pointer text-white"
+                  className="bg-transparent border-none outline-none font-medium text-sm text-white cursor-pointer"
                 >
-                  {MONTHS.map((month) => (
-                    <option key={month.value} value={month.value} className="bg-zinc-900 text-white">
-                      {month.label}
-                    </option>
+                  {MONTHS.map((m) => (
+                    <option key={m.value} value={m.value} className="bg-zinc-900">{m.label}</option>
                   ))}
                 </select>
                 <select 
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none outline-none font-medium text-sm cursor-pointer text-white border-l border-zinc-700 pl-2"
+                  className="bg-transparent border-none outline-none font-medium text-sm text-white cursor-pointer border-l border-zinc-700 pl-2"
                 >
-                  {[2024, 2025, 2026].map((year) => (
-                    <option key={year} value={year} className="bg-zinc-900 text-white">{year}</option>
+                  {[2024, 2025, 2026].map((y) => (
+                    <option key={y} value={y} className="bg-zinc-900">{y}</option>
                   ))}
                 </select>
               </div>
@@ -156,53 +140,25 @@ export default function TransaccionesPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-[#121212] border-zinc-800 text-white sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle className="text-emerald-500 text-xl font-bold">Agregar Movimiento Manual</DialogTitle>
-                  </DialogHeader>
+                  <DialogHeader><DialogTitle className="text-emerald-500 text-xl font-bold">Agregar Movimiento</DialogTitle></DialogHeader>
                   <div className="grid gap-6 py-4">
                     <div className="space-y-2">
-                      <Label className="text-zinc-300">Descripción</Label>
-                      <Input 
-                        className="bg-zinc-900 border-zinc-700 text-white focus:border-emerald-500"
-                        placeholder="Ej. Pago de arriendo" 
-                        value={nuevaTrans.descripcion} 
-                        onChange={(e) => setNuevaTrans({...nuevaTrans, descripcion: e.target.value})} 
-                      />
+                      <Label>Descripción</Label>
+                      <Input className="bg-zinc-900 border-zinc-700" value={nuevaTrans.descripcion} onChange={(e) => setNuevaTrans({...nuevaTrans, descripcion: e.target.value})} />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-zinc-300">Monto (Negativo para gastos)</Label>
-                      <Input 
-                        type="number" 
-                        className="bg-zinc-900 border-zinc-700 text-white focus:border-emerald-500"
-                        placeholder="Ej. -50000" 
-                        value={nuevaTrans.monto} 
-                        onChange={(e) => setNuevaTrans({...nuevaTrans, monto: e.target.value})} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-zinc-300">Categoría</Label>
-                      <Input 
-                        className="bg-zinc-900 border-zinc-700 text-white focus:border-emerald-500"
-                        placeholder="Ej. Alimentación" 
-                        value={nuevaTrans.categoria} 
-                        onChange={(e) => setNuevaTrans({...nuevaTrans, categoria: e.target.value})} 
-                      />
+                      <Label>Monto</Label>
+                      <Input type="number" className="bg-zinc-900 border-zinc-700" value={nuevaTrans.monto} onChange={(e) => setNuevaTrans({...nuevaTrans, monto: e.target.value})} />
                     </div>
                   </div>
-                  <Button 
-                    onClick={handleGuardarManual} 
-                    disabled={isSaving}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 text-lg shadow-lg shadow-emerald-900/20"
-                  >
-                    {isSaving ? <Loader2 className="animate-spin mr-2" /> : null}
-                    {isSaving ? "Guardando..." : "Guardar Transacción"}
+                  <Button onClick={handleGuardarManual} disabled={isSaving} className="w-full bg-emerald-600 font-black h-12 text-lg">
+                    {isSaving ? <Loader2 className="animate-spin mr-2" /> : "Guardar Transacción"}
                   </Button>
                 </DialogContent>
               </Dialog>
             </div>
           </div>
 
-          {/* PASAMOS LOS FILTROS A LA TABLA */}
           <TransactionsTable 
             cardColor={theme.card_color} 
             textColor={theme.text_color} 
