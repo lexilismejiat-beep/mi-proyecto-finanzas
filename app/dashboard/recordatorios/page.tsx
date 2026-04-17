@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Plus, Pencil, Trash2, Bell, Calendar, Clock, 
-  AlertCircle, CheckCircle2, Loader2, BellRing, Send 
+  AlertCircle, CheckCircle2, Loader2, BellRing, Send,
+  MessageCircle 
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, differenceInDays, parseISO } from "date-fns"
@@ -110,6 +111,7 @@ function ModalRecordatorio({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Frecuencia</Label>
+              <span className="text-white/20"></span>
               <Select name="frecuencia" defaultValue={editData?.frecuencia || "Mensual"}>
                 <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-[#121212] border-white/10 text-white">
@@ -141,6 +143,7 @@ export default function RecordatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [isTestingBot, setIsTestingBot] = useState(false)
+  const [isTestingWhatsApp, setIsTestingWhatsApp] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -148,13 +151,25 @@ export default function RecordatoriosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // --- ANEXO: FETCH DOBLE PARA PERFIL Y FOTO ---
       const { data: profileData } = await supabase
-        .from("profiles")
+        .from("user_profiles")
         .select("*")
         .eq("id", user.id)
         .single()
       
-      setProfile(profileData)
+      const { data: mainProfile } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .single()
+      
+      if (profileData) {
+        setProfile({
+          ...profileData,
+          avatar_url: mainProfile?.avatar_url || profileData.avatar_url
+        })
+      }
 
       if (profileData?.cedula) {
         const { data } = await supabase
@@ -175,37 +190,52 @@ export default function RecordatoriosPage() {
     fetchData() 
   }, [])
 
-  // --- FUNCIÓN DEL BOTÓN TEST ACTUALIZADA ---
   const handleTestBot = async () => {
-    if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
-      toast.error("Vincule su ID de Telegram numérico en su perfil.");
+    if (!profile?.telegram_id) {
+      toast.error("Vincule su Telegram ID en su perfil.");
       return;
     }
 
     setIsTestingBot(true);
     try {
-     // LA URL CORRECTA NO LLEVA ".functions" ANTES DE SUPABASE
-const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?t=${Date.now()}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      if (!response.ok) throw new Error("Error en la conexión");
-
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram&t=${Date.now()}`;
+      const response = await fetch(url, { method: 'GET', mode: 'cors' });
       const result = await response.json();
-
       if (result.success || result.enviados > 0) {
-        toast.success("✅ ¡Recordatorios procesados! Revisa tu Telegram.");
+        toast.success("✅ ¡Prueba de Telegram enviada!");
       } else {
-        toast.error("La función respondió pero no se detectaron envíos.");
+        toast.error("No hay recordatorios pendientes.");
       }
     } catch (error) {
-      console.error("Error en la petición:", error);
-      toast.error("Error de red. Intenta recargar la página.");
+      toast.error("Error al conectar con Telegram.");
     } finally {
       setIsTestingBot(false);
+    }
+  };
+
+  const handleTestWhatsApp = async () => {
+    if (!profile?.telefono) {
+      toast.error("No tienes un número de teléfono en tu perfil.");
+      return;
+    }
+
+    setIsTestingWhatsApp(true);
+    try {
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${profile.telefono}&t=${Date.now()}`;
+      const response = await fetch(url, { method: 'GET', mode: 'cors' });
+      
+      if (!response.ok) throw new Error();
+
+      const result = await response.json();
+      if (result.success || result.enviados > 0) {
+        toast.success(`✅ ¡WhatsApp enviado a ${profile.telefono}!`);
+      } else {
+        toast.error("La función no procesó el envío de WhatsApp.");
+      }
+    } catch (error) {
+      toast.error("Error de red con el Bot de WhatsApp.");
+    } finally {
+      setIsTestingWhatsApp(false);
     }
   };
 
@@ -246,16 +276,34 @@ const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
       
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar userName={profile?.full_name || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
+        <TopBar 
+          userName={profile ? `${profile.nombres}` : "Usuario"} 
+          avatarUrl={profile?.avatar_url} // <--- Foto conectada
+          onMenuClick={() => setMobileSidebarOpen(true)} 
+        />
         
         <main className="p-4 sm:p-8 space-y-6 max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
-              <p className="text-gray-400 text-sm">Alertas automáticas vía Telegram.</p>
+              <p className="text-gray-400 text-sm">Alertas automáticas vía WhatsApp y Telegram.</p>
             </div>
             
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleTestWhatsApp}
+                disabled={isTestingWhatsApp || loading}
+                className="border-green-500/30 text-green-500 hover:bg-green-500/10 hover:text-green-400 gap-2 font-medium"
+              >
+                {isTestingWhatsApp ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageCircle size={18} className="fill-green-500/10" />
+                )}
+                {isTestingWhatsApp ? "Enviando..." : "Probar WhatsApp"}
+              </Button>
+
               <Button 
                 variant="outline" 
                 onClick={handleTestBot}
@@ -263,7 +311,7 @@ const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler
                 className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 gap-2"
               >
                 {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                {isTestingBot ? "Probando..." : "Probar Telegram"}
+                {isTestingBot ? "Enviando..." : "Probar Telegram"}
               </Button>
 
               <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
@@ -354,4 +402,3 @@ const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler
     </div>
   )
 }
-
