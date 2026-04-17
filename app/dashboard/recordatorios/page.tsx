@@ -13,8 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Plus, Pencil, Trash2, Bell, Calendar, Clock, 
-  AlertCircle, CheckCircle2, Loader2, Send,
-  MessageCircle 
+  AlertCircle, CheckCircle2, Loader2, BellRing, Send 
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, differenceInDays, parseISO } from "date-fns"
@@ -58,7 +57,7 @@ function ModalRecordatorio({
     if (error) {
       toast.error("Error: " + error.message)
     } else {
-      toast.success(editData ? "¡Actualizado correctamente!" : "¡Recordatorio activado!")
+      toast.success(editData ? "Actualizado correctamente" : "¡Recordatorio activado!")
       setOpen(false)
       onRefresh()
     }
@@ -112,9 +111,7 @@ function ModalRecordatorio({
             <div className="space-y-2">
               <Label>Frecuencia</Label>
               <Select name="frecuencia" defaultValue={editData?.frecuencia || "Mensual"}>
-                <SelectTrigger className="bg-white/5 border-white/10">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-[#121212] border-white/10 text-white">
                   <SelectItem value="Mensual">Mensual</SelectItem>
                   <SelectItem value="Único">Una vez</SelectItem>
@@ -144,7 +141,6 @@ export default function RecordatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [isTestingBot, setIsTestingBot] = useState(false)
-  const [isTestingWhatsApp, setIsTestingWhatsApp] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -152,67 +148,64 @@ export default function RecordatoriosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
-      const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
       
-      if (profileData) {
-        setProfile({ ...profileData, avatar_url: mainProfile?.avatar_url || profileData.avatar_url })
-        if (profileData.cedula) {
-          const { data } = await supabase.from("recordatorios").select("*").eq("user_id", profileData.cedula).order("fecha_vencimiento", { ascending: true })
-          if (data) setReminders(data)
-        }
+      setProfile(profileData)
+
+      if (profileData?.cedula) {
+        const { data } = await supabase
+          .from("recordatorios")
+          .select("*")
+          .eq("user_id", profileData.cedula)
+          .order("fecha_vencimiento", { ascending: true })
+        if (data) setReminders(data)
       }
-    } catch (e) { console.error(e) } finally { setLoading(false) }
+    } catch (e) { 
+      console.error(e) 
+    } finally { 
+      setLoading(false) 
+    }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { 
+    fetchData() 
+  }, [])
 
+  // --- FUNCIÓN DEL BOTÓN TEST ACTUALIZADA ---
   const handleTestBot = async () => {
-    setIsTestingBot(true);
-    try {
-      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram`;
-      const response = await fetch(url, { method: 'POST' });
-      const result = await response.json();
-      if (result.success) {
-        toast.success("✅ ¡Prueba de Telegram enviada!");
-      } else {
-        toast.error("Error: " + (result.error || "No se pudo enviar"));
-      }
-    } catch (error) {
-      toast.error("Error al conectar con el Bot.");
-    } finally { setIsTestingBot(false); }
-  };
-
-  const handleTestWhatsApp = async () => {
-    if (!profile?.phone_number) {
-      toast.error("No tienes un número registrado.");
+    if (!profile?.telegram_chat_id || isNaN(Number(profile.telegram_chat_id))) {
+      toast.error("Vincule su ID de Telegram numérico en su perfil.");
       return;
     }
-    
-    setIsTestingWhatsApp(true);
-    console.log("Iniciando prueba de WhatsApp...");
 
+    setIsTestingBot(true);
     try {
-      const cleanPhone = profile.phone_number.replace(/\D/g, ''); 
-      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${cleanPhone}`;
+     // LA URL CORRECTA NO LLEVA ".functions" ANTES DE SUPABASE
+const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?t=${Date.now()}`;
       
-      const response = await fetch(url, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+      const response = await fetch(url, {
+        method: 'GET',
+        mode: 'cors'
       });
+
+      if (!response.ok) throw new Error("Error en la conexión");
 
       const result = await response.json();
 
-      if (response.ok && result.success) {
-        toast.success(`✅ ¡Prueba de WhatsApp enviada!`);
+      if (result.success || result.enviados > 0) {
+        toast.success("✅ ¡Recordatorios procesados! Revisa tu Telegram.");
       } else {
-        toast.error("Error: " + (result.error || "Falla en Meta"));
+        toast.error("La función respondió pero no se detectaron envíos.");
       }
     } catch (error) {
-      console.error("Error en fetch WhatsApp:", error);
-      toast.error("Error de conexión con la función.");
-    } finally { 
-      setIsTestingWhatsApp(false); 
+      console.error("Error en la petición:", error);
+      toast.error("Error de red. Intenta recargar la página.");
+    } finally {
+      setIsTestingBot(false);
     }
   };
 
@@ -253,56 +246,24 @@ export default function RecordatoriosPage() {
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
       
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar 
-          userName={profile ? `${profile.nombres}` : "Usuario"} 
-          avatarUrl={profile?.avatar_url} 
-          onMenuClick={() => setMobileSidebarOpen(true)} 
-        />
+        <TopBar userName={profile?.full_name || "Usuario"} onMenuClick={() => setMobileSidebarOpen(true)} />
         
         <main className="p-4 sm:p-8 space-y-6 max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
-              <p className="text-gray-400 text-sm">Alertas automáticas vía WhatsApp y Telegram.</p>
+              <p className="text-gray-400 text-sm">Alertas automáticas vía Telegram.</p>
             </div>
             
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                onClick={handleTestWhatsApp}
-                disabled={isTestingWhatsApp || loading}
-                className="border-green-500/30 text-green-500 hover:bg-green-500/10 hover:text-green-400 gap-2 font-medium"
-              >
-                {isTestingWhatsApp ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  <>
-                    <MessageCircle size={18} />
-                    Probar WhatsApp
-                  </>
-                )}
-              </Button>
-
               <Button 
                 variant="outline" 
                 onClick={handleTestBot}
                 disabled={isTestingBot || loading}
                 className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 gap-2"
               >
-                {isTestingBot ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Probar Telegram
-                  </>
-                )}
+                {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
+                {isTestingBot ? "Probando..." : "Probar Telegram"}
               </Button>
 
               <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
@@ -310,90 +271,86 @@ export default function RecordatoriosPage() {
           </div>
 
           <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
-             <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-               <div className="flex items-center gap-4">
-                 <div className="p-3 bg-orange-500/20 rounded-2xl">
-                     <AlertCircle className="text-orange-500 h-8 w-8" />
-                 </div>
-                 <div>
-                   <p className="text-xs text-orange-500/80 uppercase font-black tracking-tighter">Total Pendiente</p>
-                   <p className="text-4xl font-black">{formatCurrency(total)}</p>
-                 </div>
-               </div>
-               <div className="flex gap-4">
-                 <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
-                     <p className="text-xl font-bold">{pending.length}</p>
-                     <p className="text-[10px] text-gray-500 uppercase">Pendientes</p>
-                 </div>
-                 <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
-                     <p className="text-xl font-bold text-emerald-500">{completed.length}</p>
-                     <p className="text-[10px] text-gray-500 uppercase">Pagados</p>
-                 </div>
-               </div>
-             </CardContent>
-           </Card>
+            <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-orange-500/20 rounded-2xl">
+                    <AlertCircle className="text-orange-500 h-8 w-8" />
+                </div>
+                <div>
+                  <p className="text-xs text-orange-500/80 uppercase font-black tracking-tighter">Total Pendiente</p>
+                  <p className="text-4xl font-black">{formatCurrency(total)}</p>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
+                    <p className="text-xl font-bold">{pending.length}</p>
+                    <p className="text-[10px] text-gray-500 uppercase">Pendientes</p>
+                </div>
+                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
+                    <p className="text-xl font-bold text-emerald-500">{completed.length}</p>
+                    <p className="text-[10px] text-gray-500 uppercase">Pagados</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-           <div className="grid gap-4">
-             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                 <Clock size={14} /> Calendario de Pagos
-             </h2>
-             {loading ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div> : 
-               pending.length === 0 ? (
-                 <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
-                     No tienes pagos pendientes programados.
-                 </div>
-               ) : (
-                 pending.map(r => {
-                     const status = getStatusInfo(r.fecha_vencimiento, r.estado)
-                     const Icon = status.icon
-                     return (
-                     <Card key={r.id} className="group bg-[#121212] border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden">
-                         <CardContent className="p-0 flex items-stretch">
-                             <div className={cn("w-1.5", status.class.split(' ')[0])} />
-                             <div className="p-4 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
-                                 <div className="flex items-center gap-4 w-full">
-                                     <div className={cn("p-3 rounded-xl shrink-0", status.class)}><Icon size={20} /></div>
-                                     <div className="space-y-1">
-                                         <div className="flex items-center gap-2">
-                                             <h3 className="font-bold text-gray-100">{r.titulo}</h3>
-                                             <Badge variant="outline" className={cn("text-[10px] border-none font-bold", status.class)}>{status.label}</Badge>
-                                         </div>
-                                         <p className="text-xs text-gray-500 flex items-center gap-1">
-                                             <Calendar size={12}/> Vence el {format(parseISO(r.fecha_vencimiento), "dd 'de' MMMM", { locale: es })}
-                                         </p>
-                                     </div>
-                                 </div>
-                                 
-                                 <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                                     <div className="text-right">
-                                         <p className="font-black text-xl text-white">{formatCurrency(r.monto)}</p>
-                                         <p className="text-[10px] text-orange-500 font-medium">Aviso {r.recordar_dias_antes} días antes</p>
-                                     </div>
+          <div className="grid gap-4">
+            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Clock size={14} /> Calendario de Pagos
+            </h2>
+            {loading ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div> : 
+              pending.length === 0 ? (
+                <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
+                    No tienes pagos pendientes programados.
+                </div>
+              ) : (
+                pending.map(r => {
+                    const status = getStatusInfo(r.fecha_vencimiento, r.estado)
+                    const Icon = status.icon
+                    return (
+                    <Card key={r.id} className="group bg-[#121212] border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden">
+                        <CardContent className="p-0 flex items-stretch">
+                            <div className={cn("w-1.5", status.class.split(' ')[0])} />
+                            <div className="p-4 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+                                <div className="flex items-center gap-4 w-full">
+                                    <div className={cn("p-3 rounded-xl shrink-0", status.class)}><Icon size={20} /></div>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-gray-100">{r.titulo}</h3>
+                                            <Badge variant="outline" className={cn("text-[10px] border-none font-bold", status.class)}>{status.label}</Badge>
+                                        </div>
+                                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                                            <Calendar size={12}/> Vence el {format(parseISO(r.fecha_vencimiento), "dd 'de' MMMM", { locale: es })}
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
+                                    <div className="text-right">
+                                        <p className="font-black text-xl text-white">{formatCurrency(r.monto)}</p>
+                                        <p className="text-[10px] text-orange-500 font-medium">Aviso {r.recordar_dias_antes} días antes</p>
+                                    </div>
 
-                                     <div className="flex gap-1">
-                                         <Button onClick={() => handleMarcarComoPagado(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-emerald-500 hover:bg-emerald-500/10">
-                                             <CheckCircle2 size={18}/>
-                                         </Button>
-                                         <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} editData={r} />
-                                         <Button onClick={() => handleEliminar(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10">
-                                             <Trash2 size={18}/>
-                                         </Button>
-                                     </div>
-                                 </div>
-                             </div>
-                         </CardContent>
-                     </Card>
-                     )
-                 })
-               )
-             }
-           </div>
+                                    <div className="flex gap-1">
+                                        <Button onClick={() => handleMarcarComoPagado(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-emerald-500 hover:bg-emerald-500/10">
+                                            <CheckCircle2 size={18}/>
+                                        </Button>
+                                        <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} editData={r} />
+                                        <Button onClick={() => handleEliminar(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10">
+                                            <Trash2 size={18}/>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    )
+                })
+              )
+            }
+          </div>
         </main>
       </div>
     </div>
   )
-}
-
-function BellRing(props: any) {
-  return <Bell {...props} className={cn("animate-ring", props.className)} />
 }
