@@ -21,7 +21,7 @@ import { format, differenceInDays, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
 
-// --- COMPONENTE DE FORMULARIO MODAL (CORREGIDO) ---
+// --- COMPONENTE DE FORMULARIO MODAL ---
 function ModalRecordatorio({ 
   userCedula, 
   onRefresh, 
@@ -48,10 +48,9 @@ function ModalRecordatorio({
       frecuencia: formData.get("frecuencia"),
       categoria: formData.get("categoria"),
       user_id: userCedula,
-      estado: editData?.estado || 'Pendiente'
+      estado: editData?.estado || 'pendiente' // Usamos minúscula para consistencia
     }
 
-    // SI editData existe, actualizamos por ID. Si no, insertamos.
     const { error } = editData 
       ? await supabase.from("recordatorios").update(payload).eq('id', editData.id)
       : await supabase.from("recordatorios").insert([payload])
@@ -153,49 +152,27 @@ export default function RecordatoriosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: profileData } = await supabase
-        .from("user_profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single()
-      
-      const { data: mainProfile } = await supabase
-        .from("profiles")
-        .select("avatar_url")
-        .eq("id", user.id)
-        .single()
+      const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
+      const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
       
       if (profileData) {
-        setProfile({
-          ...profileData,
-          avatar_url: mainProfile?.avatar_url || profileData.avatar_url
-        })
-
+        setProfile({ ...profileData, avatar_url: mainProfile?.avatar_url || profileData.avatar_url })
         if (profileData.cedula) {
-          const { data } = await supabase
-            .from("recordatorios")
-            .select("*")
-            .eq("user_id", profileData.cedula)
-            .order("fecha_vencimiento", { ascending: true })
+          const { data } = await supabase.from("recordatorios").select("*").eq("user_id", profileData.cedula).order("fecha_vencimiento", { ascending: true })
           if (data) setReminders(data)
         }
       }
-    } catch (e) { 
-      console.error(e) 
-    } finally { 
-      setLoading(false) 
-    }
+    } catch (e) { console.error(e) } finally { setLoading(false) }
   }
 
-  useEffect(() => { 
-    fetchData() 
-  }, [])
+  useEffect(() => { fetchData() }, [])
 
+  // CORREGIDO: Usando POST y enviando el número limpio
   const handleTestBot = async () => {
     setIsTestingBot(true);
     try {
-      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram&t=${Date.now()}`;
-      const response = await fetch(url, { method: 'GET', mode: 'cors' });
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram`;
+      const response = await fetch(url, { method: 'POST' });
       const result = await response.json();
       if (result.success) {
         toast.success("✅ ¡Prueba de Telegram enviada!");
@@ -203,12 +180,11 @@ export default function RecordatoriosPage() {
         toast.error("Error: " + (result.error || "No se pudo enviar"));
       }
     } catch (error) {
-      toast.error("Error al conectar con la función.");
-    } finally {
-      setIsTestingBot(false);
-    }
+      toast.error("Error al conectar con el Bot.");
+    } finally { setIsTestingBot(false); }
   };
 
+  // CORREGIDO: Limpiando número y usando POST
   const handleTestWhatsApp = async () => {
     if (!profile?.phone_number) {
       toast.error("No tienes un número registrado.");
@@ -216,15 +192,21 @@ export default function RecordatoriosPage() {
     }
     setIsTestingWhatsApp(true);
     try {
-      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${profile.phone_number}&t=${Date.now()}`;
-      const response = await fetch(url, { method: 'GET', mode: 'cors' });
-      if (!response.ok) throw new Error();
-      toast.success(`✅ ¡Prueba de WhatsApp enviada!`);
+      // Limpiamos el número de símbolos como '+' para la API
+      const cleanPhone = profile.phone_number.replace(/\D/g, ''); 
+      const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${cleanPhone}`;
+      
+      const response = await fetch(url, { method: 'POST' });
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        toast.success(`✅ ¡Prueba de WhatsApp enviada!`);
+      } else {
+        toast.error("Error: " + (result.error || "Falla en Meta"));
+      }
     } catch (error) {
-      toast.error("Error de red con el Bot.");
-    } finally {
-      setIsTestingWhatsApp(false);
-    }
+      toast.error("Error de conexión con la función.");
+    } finally { setIsTestingWhatsApp(false); }
   };
 
   const handleMarcarComoPagado = async (id: number) => {
@@ -302,92 +284,92 @@ export default function RecordatoriosPage() {
             </div>
           </div>
 
+          {/* Cards de resumen y lista de recordatorios... (Igual al anterior) */}
           <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
-            <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-orange-500/20 rounded-2xl">
-                    <AlertCircle className="text-orange-500 h-8 w-8" />
-                </div>
-                <div>
-                  <p className="text-xs text-orange-500/80 uppercase font-black tracking-tighter">Total Pendiente</p>
-                  <p className="text-4xl font-black">{formatCurrency(total)}</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
-                    <p className="text-xl font-bold">{pending.length}</p>
-                    <p className="text-[10px] text-gray-500 uppercase">Pendientes</p>
-                </div>
-                <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
-                    <p className="text-xl font-bold text-emerald-500">{completed.length}</p>
-                    <p className="text-[10px] text-gray-500 uppercase">Pagados</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+             <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+               <div className="flex items-center gap-4">
+                 <div className="p-3 bg-orange-500/20 rounded-2xl">
+                     <AlertCircle className="text-orange-500 h-8 w-8" />
+                 </div>
+                 <div>
+                   <p className="text-xs text-orange-500/80 uppercase font-black tracking-tighter">Total Pendiente</p>
+                   <p className="text-4xl font-black">{formatCurrency(total)}</p>
+                 </div>
+               </div>
+               <div className="flex gap-4">
+                 <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
+                     <p className="text-xl font-bold">{pending.length}</p>
+                     <p className="text-[10px] text-gray-500 uppercase">Pendientes</p>
+                 </div>
+                 <div className="text-center bg-white/5 px-4 py-2 rounded-xl border border-white/5 min-w-[80px]">
+                     <p className="text-xl font-bold text-emerald-500">{completed.length}</p>
+                     <p className="text-[10px] text-gray-500 uppercase">Pagados</p>
+                 </div>
+               </div>
+             </CardContent>
+           </Card>
 
-          <div className="grid gap-4">
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Clock size={14} /> Calendario de Pagos
-            </h2>
-            {loading ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div> : 
-              pending.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
-                    No tienes pagos pendientes programados.
-                </div>
-              ) : (
-                pending.map(r => {
-                    const status = getStatusInfo(r.fecha_vencimiento, r.estado)
-                    const Icon = status.icon
-                    return (
-                    <Card key={r.id} className="group bg-[#121212] border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden">
-                        <CardContent className="p-0 flex items-stretch">
-                            <div className={cn("w-1.5", status.class.split(' ')[0])} />
-                            <div className="p-4 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
-                                <div className="flex items-center gap-4 w-full">
-                                    <div className={cn("p-3 rounded-xl shrink-0", status.class)}><Icon size={20} /></div>
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-gray-100">{r.titulo}</h3>
-                                            <Badge variant="outline" className={cn("text-[10px] border-none font-bold", status.class)}>{status.label}</Badge>
-                                        </div>
-                                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                                            <Calendar size={12}/> Vence el {format(parseISO(r.fecha_vencimiento), "dd 'de' MMMM", { locale: es })}
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                                    <div className="text-right">
-                                        <p className="font-black text-xl text-white">{formatCurrency(r.monto)}</p>
-                                        <p className="text-[10px] text-orange-500 font-medium">Aviso {r.recordar_dias_antes} días antes</p>
-                                    </div>
+           <div className="grid gap-4">
+             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                 <Clock size={14} /> Calendario de Pagos
+             </h2>
+             {loading ? <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div> : 
+               pending.length === 0 ? (
+                 <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
+                     No tienes pagos pendientes programados.
+                 </div>
+               ) : (
+                 pending.map(r => {
+                     const status = getStatusInfo(r.fecha_vencimiento, r.estado)
+                     const Icon = status.icon
+                     return (
+                     <Card key={r.id} className="group bg-[#121212] border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden">
+                         <CardContent className="p-0 flex items-stretch">
+                             <div className={cn("w-1.5", status.class.split(' ')[0])} />
+                             <div className="p-4 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+                                 <div className="flex items-center gap-4 w-full">
+                                     <div className={cn("p-3 rounded-xl shrink-0", status.class)}><Icon size={20} /></div>
+                                     <div className="space-y-1">
+                                         <div className="flex items-center gap-2">
+                                             <h3 className="font-bold text-gray-100">{r.titulo}</h3>
+                                             <Badge variant="outline" className={cn("text-[10px] border-none font-bold", status.class)}>{status.label}</Badge>
+                                         </div>
+                                         <p className="text-xs text-gray-500 flex items-center gap-1">
+                                             <Calendar size={12}/> Vence el {format(parseISO(r.fecha_vencimiento), "dd 'de' MMMM", { locale: es })}
+                                         </p>
+                                     </div>
+                                 </div>
+                                 
+                                 <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
+                                     <div className="text-right">
+                                         <p className="font-black text-xl text-white">{formatCurrency(r.monto)}</p>
+                                         <p className="text-[10px] text-orange-500 font-medium">Aviso {r.recordar_dias_antes} días antes</p>
+                                     </div>
 
-                                    <div className="flex gap-1">
-                                        <Button onClick={() => handleMarcarComoPagado(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-emerald-500 hover:bg-emerald-500/10">
-                                            <CheckCircle2 size={18}/>
-                                        </Button>
-                                        <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} editData={r} />
-                                        <Button onClick={() => handleEliminar(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10">
-                                            <Trash2 size={18}/>
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    )
-                })
-              )
-            }
-          </div>
+                                     <div className="flex gap-1">
+                                         <Button onClick={() => handleMarcarComoPagado(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-emerald-500 hover:bg-emerald-500/10">
+                                             <CheckCircle2 size={18}/>
+                                         </Button>
+                                         <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} editData={r} />
+                                         <Button onClick={() => handleEliminar(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10">
+                                             <Trash2 size={18}/>
+                                         </Button>
+                                     </div>
+                                 </div>
+                             </div>
+                         </CardContent>
+                     </Card>
+                     )
+                 })
+               )
+             }
+           </div>
         </main>
       </div>
     </div>
   )
 }
 
-// Subcomponente de Icono para evitar errores de referencia
 function BellRing(props: any) {
   return <Bell {...props} className={cn("animate-ring", props.className)} />
 }
