@@ -48,7 +48,7 @@ function ModalRecordatorio({
       frecuencia: formData.get("frecuencia"),
       categoria: formData.get("categoria"),
       user_id: userCedula,
-      estado: editData?.estado || 'pendiente' // Usamos minúscula para consistencia
+      estado: editData?.estado || 'pendiente'
     }
 
     const { error } = editData 
@@ -167,7 +167,6 @@ export default function RecordatoriosPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  // CORREGIDO: Usando POST y enviando el número limpio
   const handleTestBot = async () => {
     setIsTestingBot(true);
     try {
@@ -184,19 +183,24 @@ export default function RecordatoriosPage() {
     } finally { setIsTestingBot(false); }
   };
 
-  // CORREGIDO: Limpiando número y usando POST
   const handleTestWhatsApp = async () => {
     if (!profile?.phone_number) {
       toast.error("No tienes un número registrado.");
       return;
     }
+    
     setIsTestingWhatsApp(true);
+    console.log("Iniciando prueba de WhatsApp...");
+
     try {
-      // Limpiamos el número de símbolos como '+' para la API
       const cleanPhone = profile.phone_number.replace(/\D/g, ''); 
       const url = `https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&phone=${cleanPhone}`;
       
-      const response = await fetch(url, { method: 'POST' });
+      const response = await fetch(url, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
       const result = await response.json();
 
       if (response.ok && result.success) {
@@ -205,8 +209,11 @@ export default function RecordatoriosPage() {
         toast.error("Error: " + (result.error || "Falla en Meta"));
       }
     } catch (error) {
+      console.error("Error en fetch WhatsApp:", error);
       toast.error("Error de conexión con la función.");
-    } finally { setIsTestingWhatsApp(false); }
+    } finally { 
+      setIsTestingWhatsApp(false); 
+    }
   };
 
   const handleMarcarComoPagado = async (id: number) => {
@@ -266,8 +273,17 @@ export default function RecordatoriosPage() {
                 disabled={isTestingWhatsApp || loading}
                 className="border-green-500/30 text-green-500 hover:bg-green-500/10 hover:text-green-400 gap-2 font-medium"
               >
-                {isTestingWhatsApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle size={18} />}
-                {isTestingWhatsApp ? "Enviando..." : "Probar WhatsApp"}
+                {isTestingWhatsApp ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle size={18} />
+                    Probar WhatsApp
+                  </>
+                )}
               </Button>
 
               <Button 
@@ -276,15 +292,23 @@ export default function RecordatoriosPage() {
                 disabled={isTestingBot || loading}
                 className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 gap-2"
               >
-                {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
-                {isTestingBot ? "Enviando..." : "Probar Telegram"}
+                {isTestingBot ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} />
+                    Probar Telegram
+                  </>
+                )}
               </Button>
 
               <ModalRecordatorio userCedula={profile?.cedula} onRefresh={fetchData} />
             </div>
           </div>
 
-          {/* Cards de resumen y lista de recordatorios... (Igual al anterior) */}
           <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
              <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                <div className="flex items-center gap-4">
