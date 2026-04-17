@@ -20,8 +20,11 @@ const MONTHS = [
 ]
 
 export default function DashboardPage() {
+  // Estados de Interfaz
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  
+  // Estados de Datos
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
@@ -39,8 +42,9 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
+        // Intentamos obtener el perfil (user_profiles o profiles según tu DB)
         const { data: profileData } = await supabase
-          .from("profiles")
+          .from("user_profiles") // Cambia a "profiles" si esa es tu tabla principal
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
@@ -48,32 +52,33 @@ export default function DashboardPage() {
         if (profileData) {
           setProfile(profileData)
           
-          const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
-          const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
+          // Cálculo de fechas para el filtro
+          const startStr = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
+          const endStr = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
 
           const { data: transData, error } = await supabase
             .from("transacciones")
             .select("monto, tipo")
             .eq("user_id", profileData.cedula) 
-            .gte("created_at", startOfMonth)
-            .lte("created_at", endOfMonth)
+            .gte("created_at", startStr)
+            .lte("created_at", endStr)
 
           if (error) throw error
 
           if (transData) {
             const income = transData
-              .filter((t: any) => t.tipo === "Ingreso")
+              .filter((t: any) => t.tipo?.trim() === "Ingreso")
               .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
             
             const expenses = transData
-              .filter((t: any) => t.tipo === "Egreso")
+              .filter((t: any) => t.tipo?.trim() === "Egreso")
               .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
 
             setTotals({ income, expenses, balance: income - expenses })
           }
         }
       } catch (err) {
-        console.error("Error:", err)
+        console.error("Error en Dashboard:", err)
       } finally {
         setLoading(false)
       }
@@ -81,20 +86,23 @@ export default function DashboardPage() {
     fetchData()
   }, [supabase, selectedMonth, selectedYear])
 
-  // --- SOLUCIÓN DE COLORES ---
-  // Definimos colores por defecto por si el tema viene vacío
-  const activeTextColor = theme?.text_color || '#1e293b'
-  const activeSidebarColor = theme?.sidebar_color || '#ffffff'
-  const activeCardColor = theme?.card_color || '#ffffff'
-  const activePrimaryColor = theme?.primary_color || '#10b981'
-  const backgroundImage = profile?.background_image || theme?.background_image
+  // --- CONFIGURACIÓN DE COLORES DE SEGURIDAD (ANTI-BLANCO) ---
+  const backgroundImage = profile?.background_image || theme?.background_image_url
+  
+  // Si el texto es blanco o no existe, y el fondo es claro, forzamos un color oscuro
+  const isTextInvalid = !theme?.text_color || theme?.text_color?.toUpperCase() === "#FFFFFF"
+  const activeTextColor = (isTextInvalid && !backgroundImage) ? "#1e293b" : (theme?.text_color || "#1e293b")
+  
+  const activeSidebarColor = theme?.sidebar_color || "#0f172a"
+  const activeCardColor = theme?.card_color || "#ffffff"
+  const activePrimaryColor = theme?.primary_color || "#10b981"
+  const activeBgColor = theme?.background_color || "#f8fafc"
 
+  // Efecto de borde para legibilidad sobre imágenes
   const textWithOutline = {
     color: activeTextColor,
-    // Solo aplicamos el borde blanco si hay una imagen de fondo, 
-    // si el fondo es blanco (nuevo usuario), el borde blanco hace la letra invisible.
     textShadow: backgroundImage 
-      ? `-1.5px -1.5px 0 #FFFFFF, 1.5px -1.5px 0 #FFFFFF, -1.5px 1.5px 0 #FFFFFF, 1.5px 1.5px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.2)`
+      ? `-1px -1px 0 #FFFFFF, 1px -1px 0 #FFFFFF, -1px 1px 0 #FFFFFF, 1px 1px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.3)`
       : 'none'
   }
 
@@ -103,8 +111,7 @@ export default function DashboardPage() {
       className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed transition-all duration-500" 
       style={{ 
         backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
-        // Si no hay imagen, usamos un color de fondo gris muy claro o el del tema
-        backgroundColor: backgroundImage ? 'transparent' : (theme?.background_color || '#f8fafc')
+        backgroundColor: backgroundImage ? 'transparent' : activeBgColor 
       }}
     >
       <Sidebar 
@@ -121,45 +128,45 @@ export default function DashboardPage() {
         sidebarCollapsed && "lg:ml-16"
       )}>
         <TopBar 
-          userName={profile?.full_name || "Usuario"} 
+          userName={profile?.nombres || "Usuario"} 
           avatarUrl={profile?.avatar_url}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="flex-1 p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden bg-transparent">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           
+          {/* HEADER DEL DASHBOARD */}
           <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-3xl font-black tracking-tight" style={textWithOutline}>
                 Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
               </h2>
-              <p className="text-base font-bold" style={textWithOutline}>
-                Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              <p className="text-base font-bold opacity-90" style={{ color: activeTextColor }}>
+                {selectedYear} • Control de movimientos
               </p>
             </div>
 
-            <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
+            {/* SELECTORES CON DISEÑO FLOTANTE */}
+            <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md p-2 rounded-xl border border-white shadow-sm self-start">
               <select 
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
+                className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900 text-sm"
               >
-                {MONTHS.map((month) => (
-                  <option key={month.value} value={month.value}>{month.label}</option>
-                ))}
+                {MONTHS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
+              <div className="h-4 w-[1px] bg-slate-300" />
               <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
+                className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900 text-sm"
               >
-                {[2024, 2025, 2026].map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
+                {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
           </div>
 
+          {/* TARJETAS DE ESTADÍSTICAS */}
           <div className="mb-8 w-full">
             <StatsCards 
               totalIncome={totals.income} 
@@ -171,8 +178,9 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3 w-full">
-            <div className="lg:col-span-2 order-1 overflow-hidden">
+          {/* GRID DE TABLA Y SECCIÓN DE CÉDULA */}
+          <div className="grid gap-6 lg:grid-cols-3 w-full items-start">
+            <div className="lg:col-span-2 order-1 overflow-hidden rounded-2xl">
               <TransactionsTable 
                 cardColor={activeCardColor} 
                 textColor={activeTextColor} 
