@@ -48,11 +48,9 @@ export default function DashboardPage() {
         if (profileData) {
           setProfile(profileData)
           
-          // Rango de fechas para el filtro
           const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
           const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
 
-          // CAMBIO CLAVE: Usamos 'created_at' que es el nombre real en tu Supabase
           const { data: transData, error } = await supabase
             .from("transacciones")
             .select("monto, tipo")
@@ -63,7 +61,6 @@ export default function DashboardPage() {
           if (error) throw error
 
           if (transData) {
-            // Filtramos comparando exactamente con "Ingreso" y "Egreso" como se ve en tu captura
             const income = transData
               .filter((t: any) => t.tipo === "Ingreso")
               .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
@@ -84,18 +81,21 @@ export default function DashboardPage() {
     fetchData()
   }, [supabase, selectedMonth, selectedYear])
 
-  const backgroundImage = profile?.background_image || theme.background_image
+  // --- SOLUCIÓN DE COLORES ---
+  // Definimos colores por defecto por si el tema viene vacío
+  const activeTextColor = theme?.text_color || '#1e293b'
+  const activeSidebarColor = theme?.sidebar_color || '#ffffff'
+  const activeCardColor = theme?.card_color || '#ffffff'
+  const activePrimaryColor = theme?.primary_color || '#10b981'
+  const backgroundImage = profile?.background_image || theme?.background_image
 
-  // Estilo de "bordado" blanco (Text Outline) mejorado
   const textWithOutline = {
-    color: theme.text_color || '#1e293b',
-    textShadow: `
-      -1.5px -1.5px 0 #FFFFFF,  
-       1.5px -1.5px 0 #FFFFFF,
-      -1.5px  1.5px 0 #FFFFFF,
-       1.5px  1.5px 0 #FFFFFF,
-       0px 2px 4px rgba(0,0,0,0.2)
-    `
+    color: activeTextColor,
+    // Solo aplicamos el borde blanco si hay una imagen de fondo, 
+    // si el fondo es blanco (nuevo usuario), el borde blanco hace la letra invisible.
+    textShadow: backgroundImage 
+      ? `-1.5px -1.5px 0 #FFFFFF, 1.5px -1.5px 0 #FFFFFF, -1.5px 1.5px 0 #FFFFFF, 1.5px 1.5px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.2)`
+      : 'none'
   }
 
   return (
@@ -103,7 +103,8 @@ export default function DashboardPage() {
       className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed transition-all duration-500" 
       style={{ 
         backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
-        backgroundColor: backgroundImage ? 'transparent' : '#FFFFFF' 
+        // Si no hay imagen, usamos un color de fondo gris muy claro o el del tema
+        backgroundColor: backgroundImage ? 'transparent' : (theme?.background_color || '#f8fafc')
       }}
     >
       <Sidebar 
@@ -111,7 +112,7 @@ export default function DashboardPage() {
         onCollapsedChange={setSidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onMobileOpenChange={setMobileSidebarOpen}
-        sidebarColor={theme.sidebar_color}
+        sidebarColor={activeSidebarColor}
       />
       
       <div className={cn(
@@ -164,17 +165,17 @@ export default function DashboardPage() {
               totalIncome={totals.income} 
               totalExpenses={totals.expenses} 
               currentBalance={totals.balance}
-              cardColor={theme.card_color} 
-              textColor={theme.text_color} 
-              primaryColor={theme.primary_color} 
+              cardColor={activeCardColor} 
+              textColor={activeTextColor} 
+              primaryColor={activePrimaryColor} 
             />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3 w-full">
             <div className="lg:col-span-2 order-1 overflow-hidden">
               <TransactionsTable 
-                cardColor={theme.card_color} 
-                textColor={theme.text_color} 
+                cardColor={activeCardColor} 
+                textColor={activeTextColor} 
                 userCedula={profile?.cedula}
                 selectedMonth={selectedMonth}
                 selectedYear={selectedYear}
@@ -184,9 +185,9 @@ export default function DashboardPage() {
             <div className="lg:col-span-1 order-2">
               <CedulaSection 
                 profile={profile} 
-                cardColor={theme.card_color} 
-                textColor={theme.text_color} 
-                primaryColor={theme.primary_color}
+                cardColor={activeCardColor} 
+                textColor={activeTextColor} 
+                primaryColor={activePrimaryColor}
               />
             </div>
           </div>
