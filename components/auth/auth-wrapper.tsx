@@ -74,18 +74,26 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data: profile } = await supabase
+      // Usamos maybeSingle() para que no genere error si el usuario es nuevo
+      const { data: profileData, error } = await supabase
         .from("user_profiles")
         .select("*")
         .eq("id", userId)
-        .single()
+        .maybeSingle()
 
-      setProfile(profile)
+      if (error) throw error
 
-      // Redirect based on registration status
-      if (profile && !profile.registration_complete && pathname !== "/registro") {
-        router.push("/registro")
-      } else if (profile?.registration_complete && pathname === "/registro") {
+      setProfile(profileData)
+
+      // LÓGICA DE REDIRECCIÓN PARA NUEVOS USUARIOS
+      // Si no hay datos de perfil (null) O el registro no está marcado como completo
+      if (!profileData || !profileData.registration_complete) {
+        if (pathname !== "/registro") {
+          console.log("Perfil incompleto o inexistente, redireccionando a registro...")
+          router.push("/registro")
+        }
+      } else if (profileData?.registration_complete && pathname === "/registro") {
+        // Si el registro ya está hecho y trata de entrar a /registro, lo mandamos al home
         router.push("/")
       }
     } catch (error) {
@@ -95,29 +103,29 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
     }
   }
 
-  // Show loading state
+  // Pantalla de carga mientras verificamos sesión y perfil
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 dark:text-gray-400">Cargando...</p>
+          <p className="text-gray-600 dark:text-gray-400">Verificando cuenta...</p>
         </div>
       </div>
     )
   }
 
-  // Public pages don't need auth wrapper content
+  // Rutas públicas (login, etc)
   if (publicPaths.includes(pathname)) {
     return <>{children}</>
   }
 
-  // Registration page
+  // Página de registro (permitir que se vea para completar los datos)
   if (pathname === "/registro") {
     return <>{children}</>
   }
 
-  // Protected pages need full wrapper with theme
+  // Si llegamos aquí, el usuario está autenticado y tiene perfil completo
   return (
     <ThemeSettingsProvider>
       <ThemedContent user={user} profile={profile}>
@@ -146,7 +154,7 @@ function ThemedContent({
         color: theme.text_color,
       }}
     >
-      {/* Background Image */}
+      {/* Imagen de fondo con opacidad controlada */}
       {theme.background_image_url && (
         <div 
           className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
@@ -157,12 +165,12 @@ function ThemedContent({
         />
       )}
       
-      {/* Content */}
+      {/* Contenido principal sobre el fondo */}
       <div className="relative z-10">
         {children}
       </div>
 
-      {/* Theme Customizer Button */}
+      {/* Botón flotante para personalizar el tema */}
       <ThemeCustomizer />
     </div>
   )
