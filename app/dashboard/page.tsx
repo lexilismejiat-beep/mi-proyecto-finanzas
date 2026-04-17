@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
+  
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -39,28 +40,35 @@ export default function DashboardPage() {
         if (!user) return
 
         const { data: profileData } = await supabase
-          .from("user_profiles")
+          .from("profiles")
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
         
         if (profileData) {
           setProfile(profileData)
-          const startStr = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
-          const endStr = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
+          
+          const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
+          const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
 
           const { data: transData, error } = await supabase
             .from("transacciones")
             .select("monto, tipo")
             .eq("user_id", profileData.cedula) 
-            .gte("created_at", startStr)
-            .lte("created_at", endStr)
+            .gte("created_at", startOfMonth)
+            .lte("created_at", endOfMonth)
 
           if (error) throw error
 
           if (transData) {
-            const income = transData.filter((t: any) => t.tipo?.trim() === "Ingreso").reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-            const expenses = transData.filter((t: any) => t.tipo?.trim() === "Egreso").reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            const income = transData
+              .filter((t: any) => t.tipo === "Ingreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            
+            const expenses = transData
+              .filter((t: any) => t.tipo === "Egreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+
             setTotals({ income, expenses, balance: income - expenses })
           }
         }
@@ -71,45 +79,34 @@ export default function DashboardPage() {
       }
     }
     fetchData()
-  }, [supabase, selectedMonth, selectedYear])
+  }, [supabase, selectedMonth, selectedYear, selectedYear])
 
-  // --- LÓGICA DE FONDO Y TEMAS ---
-  // Intentamos obtener la URL de la imagen de varias fuentes posibles
-  const bgImage = profile?.background_image || theme?.background_image_url || theme?.background_image;
-  
-  const activeBgColor = theme?.background_color || "#f8fafc";
-  const activeTextColor = theme?.text_color || "#1e293b";
+  // --- LÓGICA DE TEMAS Y FONDO ---
+  const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
+  const activeBgColor = theme?.background_color || "#F3F4F6"
+  const activeTextColor = theme?.text_color || "#1e293b"
 
-  // Estilo de texto con sombra para que "flote" sobre la imagen
-  const textStyle = {
+  // Efecto de bordado/outline solo si hay imagen de fondo
+  const textWithOutline = {
     color: activeTextColor,
-    textShadow: bgImage 
-      ? `-1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 0px 2px 4px rgba(0,0,0,0.2)` 
+    textShadow: backgroundImage 
+      ? `-1.5px -1.5px 0 #FFFFFF, 1.5px -1.5px 0 #FFFFFF, -1.5px 1.5px 0 #FFFFFF, 1.5px 1.5px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.2)`
       : 'none'
-  };
+  }
 
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden">
-      {/* CAPA 1: Imagen de fondo fija */}
-      {bgImage && (
-        <div 
-          className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700"
-          style={{ 
-            backgroundImage: `url(${bgImage})`,
-            opacity: (theme?.background_opacity || 100) / 100 
-          }}
-        />
-      )}
+      {/* CAPA DE FONDO: Fija detrás de todo */}
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
+        style={{ 
+          backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+          backgroundColor: backgroundImage ? 'transparent' : activeBgColor,
+          opacity: (theme?.background_opacity ?? 100) / 100
+        }}
+      />
 
-      {/* CAPA 2: Color de fondo (solo si no hay imagen) */}
-      {!bgImage && (
-        <div 
-          className="fixed inset-0 z-0 transition-colors duration-500"
-          style={{ backgroundColor: activeBgColor }}
-        />
-      )}
-
-      {/* CAPA 3: Contenido principal */}
+      {/* CONTENIDO: Relativo para estar encima del fondo */}
       <div className="relative z-10 flex min-h-screen">
         <Sidebar 
           collapsed={sidebarCollapsed} 
@@ -120,62 +117,64 @@ export default function DashboardPage() {
         />
         
         <div className={cn(
-          "flex-1 flex flex-col transition-all duration-300", 
+          "transition-all duration-300 flex-1 flex flex-col", 
           "ml-0", "lg:ml-64", 
           sidebarCollapsed && "lg:ml-16"
         )}>
           <TopBar 
-            userName={profile?.nombres || "Usuario"} 
+            userName={profile?.full_name || "Usuario"} 
             avatarUrl={profile?.avatar_url}
             onMenuClick={() => setMobileSidebarOpen(true)}
           />
 
-          <main className="flex-1 p-4 md:p-6 lg:p-8">
+          <main className="flex-1 p-4 md:p-6 lg:p-8 bg-transparent">
             <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h2 className="text-3xl font-black tracking-tight" style={textStyle}>
+                <h2 className="text-3xl font-black tracking-tight" style={textWithOutline}>
                   Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
                 </h2>
                 <p className="text-base font-bold opacity-80" style={{ color: activeTextColor }}>
-                  {selectedYear} • Dashboard Financiero
+                  Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
                 </p>
               </div>
 
-              {/* Selectores con blur para que no tapen el fondo */}
-              <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md p-2 rounded-xl border border-white/20 shadow-lg self-start">
+              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
                 <select 
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  className="bg-transparent border-none outline-none font-bold text-slate-900 text-sm cursor-pointer"
+                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
                 >
-                  {MONTHS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {MONTHS.map((month) => (
+                    <option key={month.value} value={month.value}>{month.label}</option>
+                  ))}
                 </select>
-                <div className="h-4 w-[1px] bg-slate-400/50" />
                 <select 
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none outline-none font-bold text-slate-900 text-sm cursor-pointer"
+                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
                 >
-                  {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+                  {[2024, 2025, 2026].map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            <div className="mb-8">
+            <div className="mb-8 w-full">
               <StatsCards 
                 totalIncome={totals.income} 
                 totalExpenses={totals.expenses} 
                 currentBalance={totals.balance}
-                cardColor={theme?.card_color || "#ffffff"} 
+                cardColor={theme?.card_color || "#FFFFFF"} 
                 textColor={activeTextColor} 
-                primaryColor={theme?.primary_color || "#10b981"} 
+                primaryColor={theme?.primary_color || "#10B981"} 
               />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3 items-start">
-              <div className="lg:col-span-2 rounded-2xl overflow-hidden">
+            <div className="grid gap-6 lg:grid-cols-3 w-full">
+              <div className="lg:col-span-2 order-1 overflow-hidden">
                 <TransactionsTable 
-                  cardColor={theme?.card_color || "#ffffff"} 
+                  cardColor={theme?.card_color || "#FFFFFF"} 
                   textColor={activeTextColor} 
                   userCedula={profile?.cedula}
                   selectedMonth={selectedMonth}
@@ -183,12 +182,12 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 order-2">
                 <CedulaSection 
                   profile={profile} 
-                  cardColor={theme?.card_color || "#ffffff"} 
+                  cardColor={theme?.card_color || "#FFFFFF"} 
                   textColor={activeTextColor} 
-                  primaryColor={theme?.primary_color || "#10b981"}
+                  primaryColor={theme?.primary_color || "#10B981"}
                 />
               </div>
             </div>
