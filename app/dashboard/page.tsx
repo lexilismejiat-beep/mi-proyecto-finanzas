@@ -9,6 +9,16 @@ import { CedulaSection } from "@/components/dashboard/cedula-section"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
+import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
+
+const MONTHS = [
+  { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
+  { value: 2, label: "Marzo" }, { value: 3, label: "Abril" },
+  { value: 4, label: "Mayo" }, { value: 5, label: "Junio" },
+  { value: 6, label: "Julio" }, { value: 7, label: "Agosto" },
+  { value: 8, label: "Septiembre" }, { value: 9, label: "Octubre" },
+  { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
+]
 
 export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -17,6 +27,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+
   const supabase = createClient()
   const { theme } = useThemeSettings()
 
@@ -27,34 +40,52 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // 1. Buscamos en la tabla 'profiles' que es la que tiene el 'full_name' y 'cedula'
+        // --- CORRECCIÓN CLAVE: Usamos 'user_profiles' como en tu código de transacciones ---
         const { data: profileData } = await supabase
-          .from("profiles")
+          .from("user_profiles")
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
         
+        // También traemos el avatar de 'profiles' si existe
+        const { data: mainProfile } = await supabase
+          .from("profiles")
+          .select("avatar_url, background_image")
+          .eq("id", user.id)
+          .maybeSingle()
+        
         if (profileData) {
-          setProfile(profileData)
+          const fullProfile = {
+            ...profileData,
+            avatar_url: mainProfile?.avatar_url || profileData.avatar_url,
+            background_image: mainProfile?.background_image
+          }
+          setProfile(fullProfile)
+          
+          // --- LÓGICA DE FILTRADO IGUAL A TRANSACCIONES ---
+          const baseDate = new Date(selectedYear, selectedMonth, 1)
+          const rangeFrom = startOfMonth(baseDate)
+          const rangeTo = endOfMonth(baseDate)
 
-          // 2. Cálculo de finanzas usando la cédula como user_id
-          if (profileData.cedula) {
-            const { data: transData } = await supabase
-              .from("transacciones")
-              .select("monto, tipo")
-              .eq("user_id", profileData.cedula) 
+          const { data: transData, error } = await supabase
+            .from("transacciones")
+            .select("monto, tipo")
+            .eq("user_id", profileData.cedula || user.id) // Filtra por cédula
+            .gte("created_at", startOfDay(rangeFrom).toISOString())
+            .lte("created_at", endOfDay(rangeTo).toISOString())
 
-            if (transData) {
-              const income = transData
-                .filter((t: any) => t.tipo?.trim() === "Ingreso")
-                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-              
-              const expenses = transData
-                .filter((t: any) => t.tipo?.trim() === "Egreso")
-                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+          if (error) throw error
 
-              setTotals({ income, expenses, balance: income - expenses })
-            }
+          if (transData) {
+            const income = transData
+              .filter((t: any) => t.tipo?.trim() === "Ingreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            
+            const expenses = transData
+              .filter((t: any) => t.tipo?.trim() === "Egreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+
+            setTotals({ income, expenses, balance: income - expenses })
           }
         }
       } catch (err) {
@@ -64,75 +95,117 @@ export default function DashboardPage() {
       }
     }
     fetchData()
-  }, [supabase])
+  }, [supabase, selectedMonth, selectedYear])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">
-        <p className="animate-pulse">Cargando tus finanzas...</p>
-      </div>
-    )
+  // --- LÓGICA DE TEMAS Y FONDO ---
+  const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
+  const activeBgColor = theme?.background_color || "#F3F4F6"
+  const activeTextColor = theme?.text_color || "#1e293b"
+
+  const textWithOutline = {
+    color: activeTextColor,
+    textShadow: backgroundImage 
+      ? `-1.5px -1.5px 0 #FFFFFF, 1.5px -1.5px 0 #FFFFFF, -1.5px 1.5px 0 #FFFFFF, 1.5px 1.5px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.2)`
+      : 'none'
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: theme.background_color || "#F8FAFC" }}>
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onCollapsedChange={setSidebarCollapsed}
-        mobileOpen={mobileSidebarOpen}
-        onMobileOpenChange={setMobileSidebarOpen}
-        sidebarColor={theme.sidebar_color}
+    <div className="relative min-h-screen w-full overflow-x-hidden">
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
+        style={{ 
+          backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+          backgroundColor: backgroundImage ? 'transparent' : activeBgColor,
+          opacity: (theme?.background_opacity ?? 100) / 100
+        }}
       />
-      
-      <div className={cn(
-        "transition-all duration-300 min-h-screen", 
-        "lg:ml-64", 
-        sidebarCollapsed && "lg:ml-16"
-      )}>
-        <TopBar 
-          // CORRECCIÓN: Usamos full_name de tu tabla profiles
-          userName={profile?.full_name || "Usuario"} 
-          avatarUrl={profile?.avatar_url}
-          onMenuClick={() => setMobileSidebarOpen(true)}
+
+      <div className="relative z-10 flex min-h-screen">
+        <Sidebar 
+          collapsed={sidebarCollapsed} 
+          onCollapsedChange={setSidebarCollapsed}
+          mobileOpen={mobileSidebarOpen}
+          onMobileOpenChange={setMobileSidebarOpen}
+          sidebarColor={theme?.sidebar_color || "#0f172a"}
         />
+        
+        <div className={cn(
+          "transition-all duration-300 flex-1 flex flex-col", 
+          "ml-0", "lg:ml-64", 
+          sidebarCollapsed && "lg:ml-16"
+        )}>
+          <TopBar 
+            userName={profile?.nombres || profile?.full_name || "Usuario"} 
+            avatarUrl={profile?.avatar_url}
+            onMenuClick={() => setMobileSidebarOpen(true)}
+          />
 
-        <main className="p-4 md:p-8">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold" style={{ color: theme.text_color }}>
-              Resumen Financiero
-            </h2>
-          </div>
+          <main className="flex-1 p-4 md:p-6 lg:p-8 bg-transparent">
+            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight" style={textWithOutline}>
+                  Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
+                </h2>
+                <p className="text-base font-bold opacity-80" style={{ color: activeTextColor }}>
+                  Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                </p>
+              </div>
 
-          <div className="mb-8">
-            <StatsCards 
-              totalIncome={totals.income} 
-              totalExpenses={totals.expenses} 
-              currentBalance={totals.balance}
-              cardColor={theme.card_color} 
-              textColor={theme.text_color} 
-              primaryColor={theme.primary_color} 
-            />
-          </div>
+              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
+                <select 
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
+                >
+                  {MONTHS.map((month) => (
+                    <option key={month.value} value={month.value}>{month.label}</option>
+                  ))}
+                </select>
+                <select 
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
+                >
+                  {[2024, 2025, 2026].map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <TransactionsTable 
-                cardColor={theme.card_color} 
-                textColor={theme.text_color} 
-                userCedula={profile?.cedula} 
+            <div className="mb-8 w-full">
+              <StatsCards 
+                totalIncome={totals.income} 
+                totalExpenses={totals.expenses} 
+                currentBalance={totals.balance}
+                cardColor={theme?.card_color || "#FFFFFF"} 
+                textColor={activeTextColor} 
+                primaryColor={theme?.primary_color || "#10B981"} 
               />
             </div>
 
-            <div className="lg:col-span-1">
-              <CedulaSection 
-                profile={profile} 
-                cardColor={theme.card_color} 
-                textColor={theme.text_color} 
-                primaryColor={theme.primary_color}
-              />
+            <div className="grid gap-6 lg:grid-cols-3 w-full">
+              <div className="lg:col-span-2 order-1 overflow-hidden">
+                <TransactionsTable 
+                  cardColor={theme?.card_color || "#FFFFFF"} 
+                  textColor={activeTextColor} 
+                  userCedula={profile?.cedula}
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
+                />
+              </div>
+
+              <div className="lg:col-span-1 order-2">
+                <CedulaSection 
+                  profile={profile} 
+                  cardColor={theme?.card_color || "#FFFFFF"} 
+                  textColor={activeTextColor} 
+                  primaryColor={theme?.primary_color || "#10B981"}
+                />
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   )
