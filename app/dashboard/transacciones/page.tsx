@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
+import { StatsCards } from "@/components/dashboard/stats-cards"
+import { TransactionsTable } from "@/components/dashboard/transactions-table"
+import { CedulaSection } from "@/components/dashboard/cedula-section"
 import { cn } from "@/lib/utils"
-import { Loader2, Calendar as CalendarIcon, AlertCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
-import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
-import { toast } from "sonner"
+import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -19,198 +20,192 @@ const MONTHS = [
   { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
 ]
 
-export default function TransaccionesPage() {
-  const supabase = createClient()
-  const { theme } = useThemeSettings()
-
-  // Estados de interfaz
+export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  
-  // Estados de datos
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
   
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
-  // 1. Cargar Perfil
-  useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+  const supabase = createClient()
+  const { theme } = useThemeSettings()
 
-      const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
-      const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      
-      if (profileData) {
-        setProfile({
-          ...profileData,
-          avatar_url: mainProfile?.avatar_url || profileData.avatar_url
-        })
-      }
-    }
-    loadUser()
-  }, [])
-
-  // 2. Carga de Transacciones
   useEffect(() => {
-    async function fetchTransactions() {
+    const fetchData = async () => {
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        const baseDate = new Date(selectedYear, selectedMonth, 1)
-        const rangeFrom = startOfMonth(baseDate)
-        const rangeTo = endOfMonth(baseDate)
-
-        let query = supabase
-          .from("transacciones")
+        // --- CORRECCIÓN CLAVE: Usamos 'user_profiles' como en tu código de transacciones ---
+        const { data: profileData } = await supabase
+          .from("user_profiles")
           .select("*")
-          .gte("created_at", startOfDay(rangeFrom).toISOString())
-          .lte("created_at", endOfDay(rangeTo).toISOString())
-          .order("created_at", { ascending: false })
+          .eq("id", user.id)
+          .maybeSingle()
+        
+        // También traemos el avatar de 'profiles' si existe
+        const { data: mainProfile } = await supabase
+          .from("profiles")
+          .select("avatar_url, background_image")
+          .eq("id", user.id)
+          .maybeSingle()
+        
+        if (profileData) {
+          const fullProfile = {
+            ...profileData,
+            avatar_url: mainProfile?.avatar_url || profileData.avatar_url,
+            background_image: mainProfile?.background_image
+          }
+          setProfile(fullProfile)
+          
+          // --- LÓGICA DE FILTRADO IGUAL A TRANSACCIONES ---
+          const baseDate = new Date(selectedYear, selectedMonth, 1)
+          const rangeFrom = startOfMonth(baseDate)
+          const rangeTo = endOfMonth(baseDate)
 
-        const userIdToFilter = profile?.cedula || user.id
-        query = query.eq("user_id", userIdToFilter)
+          const { data: transData, error } = await supabase
+            .from("transacciones")
+            .select("monto, tipo")
+            .eq("user_id", profileData.cedula || user.id) // Filtra por cédula
+            .gte("created_at", startOfDay(rangeFrom).toISOString())
+            .lte("created_at", endOfDay(rangeTo).toISOString())
 
-        const { data, error } = await query
-        if (error) throw error
-        setTransactions(data || [])
+          if (error) throw error
+
+          if (transData) {
+            const income = transData
+              .filter((t: any) => t.tipo?.trim() === "Ingreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            
+            const expenses = transData
+              .filter((t: any) => t.tipo?.trim() === "Egreso")
+              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+
+            setTotals({ income, expenses, balance: income - expenses })
+          }
+        }
       } catch (err) {
-        console.error(err)
-        toast.error("Error al sincronizar datos")
+        console.error("Error en Dashboard:", err)
       } finally {
         setLoading(false)
       }
     }
-    fetchTransactions()
-  }, [selectedMonth, selectedYear, profile?.cedula])
+    fetchData()
+  }, [supabase, selectedMonth, selectedYear])
+
+  // --- LÓGICA DE TEMAS Y FONDO ---
+  const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
+  const activeBgColor = theme?.background_color || "#F3F4F6"
+  const activeTextColor = theme?.text_color || "#1e293b"
+
+  const textWithOutline = {
+    color: activeTextColor,
+    textShadow: backgroundImage 
+      ? `-1.5px -1.5px 0 #FFFFFF, 1.5px -1.5px 0 #FFFFFF, -1.5px 1.5px 0 #FFFFFF, 1.5px 1.5px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.2)`
+      : 'none'
+  }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Sidebar con controles de mobile activos */}
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onCollapsedChange={setSidebarCollapsed} 
-        mobileOpen={mobileSidebarOpen} 
-        onMobileOpenChange={setMobileSidebarOpen} 
+    <div className="relative min-h-screen w-full overflow-x-hidden">
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
+        style={{ 
+          backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+          backgroundColor: backgroundImage ? 'transparent' : activeBgColor,
+          opacity: (theme?.background_opacity ?? 100) / 100
+        }}
       />
 
-      <div className={cn(
-        "transition-all duration-300",
-        "lg:ml-64",
-        sidebarCollapsed && "lg:ml-16"
-      )}>
-        <TopBar 
-          userName={profile ? `${profile.nombres}` : "Usuario"} 
-          avatarUrl={profile?.avatar_url}
-          onMenuClick={() => setMobileSidebarOpen(true)} // Activa la hamburguesa
+      <div className="relative z-10 flex min-h-screen">
+        <Sidebar 
+          collapsed={sidebarCollapsed} 
+          onCollapsedChange={setSidebarCollapsed}
+          mobileOpen={mobileSidebarOpen}
+          onMobileOpenChange={setMobileSidebarOpen}
+          sidebarColor={theme?.sidebar_color || "#0f172a"}
         />
         
-        <main className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Mis Movimientos</h1>
-              <p className="text-gray-400 text-sm">Visualizando {MONTHS[selectedMonth].label} {selectedYear}</p>
-            </div>
+        <div className={cn(
+          "transition-all duration-300 flex-1 flex flex-col", 
+          "ml-0", "lg:ml-64", 
+          sidebarCollapsed && "lg:ml-16"
+        )}>
+          <TopBar 
+            userName={profile?.nombres || profile?.full_name || "Usuario"} 
+            avatarUrl={profile?.avatar_url}
+            onMenuClick={() => setMobileSidebarOpen(true)}
+          />
 
-            {/* Selectores Responsivos */}
-            <div className="flex items-center w-full md:w-auto gap-2 bg-[#121212] p-2 rounded-xl border border-white/10">
-              <CalendarIcon className="ml-2 h-4 w-4 text-emerald-500" />
-              <select 
-                value={selectedMonth} 
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="bg-transparent border-none focus:ring-0 text-sm font-medium cursor-pointer p-1 flex-1 md:flex-none"
-              >
-                {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
-              </select>
-              
-              <select 
-                value={selectedYear} 
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="bg-transparent border-none focus:ring-0 text-sm font-medium cursor-pointer p-1 border-l border-white/10"
-              >
-                {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
-              </select>
-            </div>
-          </div>
+          <main className="flex-1 p-4 md:p-6 lg:p-8 bg-transparent">
+            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight" style={textWithOutline}>
+                  Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
+                </h2>
+                <p className="text-base font-bold opacity-80" style={{ color: activeTextColor }}>
+                  Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                </p>
+              </div>
 
-          {/* Contenedor de Resultados */}
-          <div className="bg-[#121212] rounded-2xl border border-white/5 overflow-hidden">
-            {loading ? (
-              <div className="p-20 flex flex-col items-center gap-4">
-                <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
-                <p className="text-gray-500 animate-pulse">Cargando...</p>
-              </div>
-            ) : transactions.length === 0 ? (
-              <div className="p-20 text-center">
-                <AlertCircle className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">No hay registros.</p>
-              </div>
-            ) : (
-              <>
-                {/* VISTA PARA MÓVIL (Tarjetas) - Se oculta en Desktop */}
-                <div className="block md:hidden divide-y divide-white/5">
-                  {transactions.map((t) => (
-                    <div key={t.id} className="p-4 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-gray-100">{t.descripcion || "Sin nombre"}</p>
-                          <p className="text-[10px] text-gray-500 uppercase tracking-wider">{format(new Date(t.created_at), "dd MMM, yyyy")}</p>
-                        </div>
-                        <p className={cn(
-                          "font-bold",
-                          t.tipo?.trim() === "Ingreso" ? "text-emerald-400" : "text-rose-400"
-                        )}>
-                          {t.tipo?.trim() === "Ingreso" ? "+" : "-"}${Number(t.monto).toLocaleString('es-CO')}
-                        </p>
-                      </div>
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 text-[9px] text-gray-400 border border-white/10 uppercase">
-                        {t.categoria}
-                      </span>
-                    </div>
+              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
+                <select 
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
+                >
+                  {MONTHS.map((month) => (
+                    <option key={month.value} value={month.value}>{month.label}</option>
                   ))}
-                </div>
+                </select>
+                <select 
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
+                >
+                  {[2024, 2025, 2026].map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-                {/* VISTA PARA DESKTOP (Tabla) - Se oculta en Móvil */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
-                      <tr>
-                        <th className="p-4 font-semibold">Fecha</th>
-                        <th className="p-4 font-semibold">Descripción</th>
-                        <th className="p-4 font-semibold">Categoría</th>
-                        <th className="p-4 font-semibold text-right">Monto</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {transactions.map((t) => (
-                        <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="p-4 text-sm text-gray-400">{format(new Date(t.created_at), "dd/MM/yyyy")}</td>
-                          <td className="p-4 font-medium">{t.descripcion || "Gasto sin nombre"}</td>
-                          <td className="p-4">
-                            <span className="px-2 py-1 rounded-md bg-white/5 text-[10px] text-gray-400 border border-white/10 uppercase">
-                              {t.categoria}
-                            </span>
-                          </td>
-                          <td className={cn(
-                            "p-4 text-right font-bold",
-                            t.tipo?.trim() === "Ingreso" ? "text-emerald-400" : "text-rose-400"
-                          )}>
-                            {t.tipo?.trim() === "Ingreso" ? "+" : "-"}${Number(t.monto).toLocaleString('es-CO')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        </main>
+            <div className="mb-8 w-full">
+              <StatsCards 
+                totalIncome={totals.income} 
+                totalExpenses={totals.expenses} 
+                currentBalance={totals.balance}
+                cardColor={theme?.card_color || "#FFFFFF"} 
+                textColor={activeTextColor} 
+                primaryColor={theme?.primary_color || "#10B981"} 
+              />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-3 w-full">
+              <div className="lg:col-span-2 order-1 overflow-hidden">
+                <TransactionsTable 
+                  cardColor={theme?.card_color || "#FFFFFF"} 
+                  textColor={activeTextColor} 
+                  userCedula={profile?.cedula}
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
+                />
+              </div>
+
+              <div className="lg:col-span-1 order-2">
+                <CedulaSection 
+                  profile={profile} 
+                  cardColor={theme?.card_color || "#FFFFFF"} 
+                  textColor={activeTextColor} 
+                  primaryColor={theme?.primary_color || "#10B981"}
+                />
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   )
