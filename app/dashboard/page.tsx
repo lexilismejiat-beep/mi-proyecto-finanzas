@@ -48,6 +48,7 @@ export default function DashboardPage() {
         if (profileData) {
           setProfile(profileData)
           
+          // Ajuste de fechas para cubrir el mes completo sin errores de zona horaria
           const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
           const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
 
@@ -61,32 +62,32 @@ export default function DashboardPage() {
           if (error) throw error
 
           if (transData) {
+            // Normalización a minúsculas para que lea "Ingreso" o "ingreso" por igual
             const income = transData
-              .filter((t: any) => t.tipo === "Ingreso")
+              .filter((t: any) => t.tipo?.toLowerCase() === "ingreso")
               .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
             
             const expenses = transData
-              .filter((t: any) => t.tipo === "Egreso")
+              .filter((t: any) => t.tipo?.toLowerCase() === "egreso")
               .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
 
             setTotals({ income, expenses, balance: income - expenses })
           }
         }
       } catch (err) {
-        console.error("Error:", err)
+        console.error("Error en fetchData:", err)
       } finally {
         setLoading(false)
       }
     }
     fetchData()
-  }, [supabase, selectedMonth, selectedYear, selectedYear])
+  }, [supabase, selectedMonth, selectedYear]) // Limpiado el array de dependencias
 
   // --- LÓGICA DE TEMAS Y FONDO ---
   const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
   const activeBgColor = theme?.background_color || "#F3F4F6"
   const activeTextColor = theme?.text_color || "#1e293b"
 
-  // Efecto de bordado/outline solo si hay imagen de fondo
   const textWithOutline = {
     color: activeTextColor,
     textShadow: backgroundImage 
@@ -96,7 +97,6 @@ export default function DashboardPage() {
 
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden">
-      {/* CAPA DE FONDO: Fija detrás de todo */}
       <div 
         className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
         style={{ 
@@ -106,7 +106,6 @@ export default function DashboardPage() {
         }}
       />
 
-      {/* CONTENIDO: Relativo para estar encima del fondo */}
       <div className="relative z-10 flex min-h-screen">
         <Sidebar 
           collapsed={sidebarCollapsed} 
