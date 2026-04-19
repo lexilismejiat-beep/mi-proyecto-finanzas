@@ -3,12 +3,22 @@
 import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
-import { StatsCards } from "@/components/dashboard/stats-cards"
-import { TransactionsTable } from "@/components/dashboard/transactions-table"
-import { CedulaSection } from "@/components/dashboard/cedula-section"
 import { cn } from "@/lib/utils"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { 
+  Plus, Pencil, Trash2, Loader2, ArrowUpCircle, ArrowDownCircle,
+  Filter, Tag, CreditCard, Search
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { useThemeSettings } from "@/lib/theme-context"
+import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
+import { es } from "date-fns/locale"
+import { toast } from "sonner"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -19,180 +29,184 @@ const MONTHS = [
   { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
 ]
 
-export default function DashboardPage() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
-  
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-
+// --- COMPONENTE DE FORMULARIO MODAL ---
+function ModalTransaccion({ userId, onRefresh, editData = null }: { userId: string, onRefresh: () => void, editData?: any }) {
   const supabase = createClient()
-  const { theme } = useThemeSettings()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle()
-        
-        if (profileData) {
-          setProfile(profileData)
-          
-          const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
-          const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
-
-          const { data: transData, error } = await supabase
-            .from("transacciones")
-            .select("monto, tipo")
-            .eq("user_id", profileData.cedula) 
-            .gte("created_at", startOfMonth)
-            .lte("created_at", endOfMonth)
-
-          if (error) throw error
-
-          if (transData) {
-            const income = transData
-              .filter((t: any) => t.tipo === "Ingreso")
-              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-            
-            const expenses = transData
-              .filter((t: any) => t.tipo === "Egreso")
-              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-
-            setTotals({ income, expenses, balance: income - expenses })
-          }
-        }
-      } catch (err) {
-        console.error("Error:", err)
-      } finally {
-        setLoading(false)
-      }
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    const formData = new FormData(e.currentTarget)
+    const payload = {
+      descripcion: formData.get("descripcion"),
+      monto: parseFloat(formData.get("monto") as string),
+      tipo: formData.get("tipo"),
+      categoria: formData.get("categoria"),
+      user_id: userId,
+      created_at: editData ? editData.created_at : new Date().toISOString()
     }
-    fetchData()
-  }, [supabase, selectedMonth, selectedYear, selectedYear])
+    const { error } = editData 
+      ? await supabase.from("transacciones").update(payload).eq('id', editData.id)
+      : await supabase.from("transacciones").insert([payload])
 
-  // --- LÓGICA DE TEMAS Y FONDO ---
-  const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
-  const activeBgColor = theme?.background_color || "#F3F4F6"
-  const activeTextColor = theme?.text_color || "#1e293b"
-
-  // Efecto de bordado/outline solo si hay imagen de fondo
-  const textWithOutline = {
-    color: activeTextColor,
-    textShadow: backgroundImage 
-      ? `-1.5px -1.5px 0 #FFFFFF, 1.5px -1.5px 0 #FFFFFF, -1.5px 1.5px 0 #FFFFFF, 1.5px 1.5px 0 #FFFFFF, 0px 2px 4px rgba(0,0,0,0.2)`
-      : 'none'
+    if (error) toast.error("Error: " + error.message)
+    else {
+      toast.success(editData ? "Actualizado" : "Registrado")
+      setOpen(false)
+      onRefresh()
+    }
+    setLoading(false)
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden">
-      {/* CAPA DE FONDO: Fija detrás de todo */}
-      <div 
-        className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
-        style={{ 
-          backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
-          backgroundColor: backgroundImage ? 'transparent' : activeBgColor,
-          opacity: (theme?.background_opacity ?? 100) / 100
-        }}
-      />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {editData ? (
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white">
+            <Pencil size={16}/>
+          </Button>
+        ) : (
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 w-full md:w-auto">
+            <Plus size={18} /> Nuevo Movimiento
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="bg-[#121212] border-white/10 text-white sm:max-w-[425px]">
+        <DialogHeader><DialogTitle>{editData ? "Editar" : "Nuevo"}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Descripción" className="bg-white/5 border-white/10" required />
+          <div className="grid grid-cols-2 gap-4">
+            <Input name="monto" type="number" defaultValue={editData?.monto} placeholder="Monto" className="bg-white/5 border-white/10" required />
+            <Select name="tipo" defaultValue={editData?.tipo?.trim() || "Egreso"}>
+              <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#121212] border-white/10 text-white">
+                <SelectItem value="Ingreso">Ingreso</SelectItem>
+                <SelectItem value="Egreso">Egreso</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Input name="categoria" defaultValue={editData?.categoria} placeholder="Categoría" className="bg-white/5 border-white/10" required />
+          <Button type="submit" className="w-full bg-emerald-600" disabled={loading}>{loading ? "Cargando..." : "Guardar"}</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
-      {/* CONTENIDO: Relativo para estar encima del fondo */}
-      <div className="relative z-10 flex min-h-screen">
-        <Sidebar 
-          collapsed={sidebarCollapsed} 
-          onCollapsedChange={setSidebarCollapsed}
-          mobileOpen={mobileSidebarOpen}
-          onMobileOpenChange={setMobileSidebarOpen}
-          sidebarColor={theme?.sidebar_color || "#0f172a"}
-        />
-        
-        <div className={cn(
-          "transition-all duration-300 flex-1 flex flex-col", 
-          "ml-0", "lg:ml-64", 
-          sidebarCollapsed && "lg:ml-16"
-        )}>
-          <TopBar 
-            userName={profile?.full_name || "Usuario"} 
-            avatarUrl={profile?.avatar_url}
-            onMenuClick={() => setMobileSidebarOpen(true)}
-          />
+export default function TransaccionesPage() {
+  const supabase = createClient()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState<any>(null)
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
-          <main className="flex-1 p-4 md:p-6 lg:p-8 bg-transparent">
-            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-3xl font-black tracking-tight" style={textWithOutline}>
-                  Resumen de {MONTHS.find(m => m.value === selectedMonth)?.label}
-                </h2>
-                <p className="text-base font-bold opacity-80" style={{ color: activeTextColor }}>
-                  Visualizando movimientos de {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
-                </p>
-              </div>
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
+      setProfile(prof)
+      const baseDate = new Date(selectedYear, selectedMonth, 1)
+      const { data } = await supabase.from("transacciones").select("*")
+        .eq("user_id", prof?.cedula)
+        .gte("created_at", startOfMonth(baseDate).toISOString())
+        .lte("created_at", endOfMonth(baseDate).toISOString())
+        .order("created_at", { ascending: false })
+      setTransactions(data || [])
+    } catch (e) { console.error(e) } finally { setLoading(false) }
+  }
 
-              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
-                <select 
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
-                >
-                  {MONTHS.map((month) => (
-                    <option key={month.value} value={month.value}>{month.label}</option>
-                  ))}
+  useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear])
+
+  const handleEliminar = async (id: number) => {
+    if (confirm("¿Eliminar?")) {
+      await supabase.from("transacciones").delete().eq('id', id)
+      fetchTransactions()
+    }
+  }
+
+  const formatCurrency = (n: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(n)
+
+  return (
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#0a0a0a] text-white">
+      <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
+
+      <div className={cn("transition-all duration-300 flex-1 flex flex-col", "ml-0", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
+        <TopBar userName={profile?.full_name || "Usuario"} avatarUrl={profile?.avatar_url} onMenuClick={() => setMobileSidebarOpen(true)} />
+
+        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl mx-auto w-full">
+          {/* HEADER RESPONSIVE */}
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black italic uppercase">Mis Movimientos</h1>
+              <p className="text-gray-500 text-sm">Gestiona tus ingresos y gastos</p>
+            </div>
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="flex bg-[#121212] border border-white/10 rounded-xl p-1 justify-between">
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-transparent border-none text-xs font-bold p-2 outline-none">
+                  {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
                 </select>
-                <select 
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
-                >
-                  {[2024, 2025, 2026].map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
+                <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-transparent border-none text-xs font-bold p-2 outline-none">
+                  {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
                 </select>
               </div>
+              <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} />
             </div>
+          </div>
 
-            <div className="mb-8 w-full">
-              <StatsCards 
-                totalIncome={totals.income} 
-                totalExpenses={totals.expenses} 
-                currentBalance={totals.balance}
-                cardColor={theme?.card_color || "#FFFFFF"} 
-                textColor={activeTextColor} 
-                primaryColor={theme?.primary_color || "#10B981"} 
-              />
-            </div>
+          {/* LISTA RESPONSIVA */}
+          <div className="grid gap-3">
+            {loading ? (
+              <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-500" /></div>
+            ) : transactions.length === 0 ? (
+              <div className="text-center py-10 text-gray-600 border border-dashed border-white/5 rounded-2xl">No hay registros</div>
+            ) : (
+              transactions.map(t => {
+                const isIngreso = t.tipo?.trim() === "Ingreso"
+                return (
+                  <Card key={t.id} className="bg-[#121212] border-white/5">
+                    <CardContent className="p-3 md:p-4">
+                      {/* Contenedor Flex que cambia a columna en móviles pequeños */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn("p-2 rounded-xl", isIngreso ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500")}>
+                            {isIngreso ? <ArrowUpCircle size={20} /> : <ArrowDownCircle size={20} />}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-sm md:text-base text-gray-100 truncate">{t.descripcion}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-[9px] border-white/10 text-gray-500 px-1 py-0">{t.categoria}</Badge>
+                              <span className="text-[10px] text-gray-600 uppercase font-medium">{format(new Date(t.created_at), "dd MMM", { locale: es })}</span>
+                            </div>
+                          </div>
+                        </div>
 
-            <div className="grid gap-6 lg:grid-cols-3 w-full">
-              <div className="lg:col-span-2 order-1 overflow-hidden">
-                <TransactionsTable 
-                  cardColor={theme?.card_color || "#FFFFFF"} 
-                  textColor={activeTextColor} 
-                  userCedula={profile?.cedula}
-                  selectedMonth={selectedMonth}
-                  selectedYear={selectedYear}
-                />
-              </div>
-
-              <div className="lg:col-span-1 order-2">
-                <CedulaSection 
-                  profile={profile} 
-                  cardColor={theme?.card_color || "#FFFFFF"} 
-                  textColor={activeTextColor} 
-                  primaryColor={theme?.primary_color || "#10B981"}
-                />
-              </div>
-            </div>
-          </main>
-        </div>
+                        {/* Monto y Acciones: Siempre alineados a la derecha en PC, full width en móvil si es necesario */}
+                        <div className="flex items-center justify-between sm:justify-end gap-3 md:gap-6 border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
+                          <p className={cn("font-black text-base md:text-lg", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                            {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
+                          </p>
+                          <div className="flex items-center gap-1 border-l border-white/10 pl-2">
+                            <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
+                            <Button onClick={() => handleEliminar(t.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:bg-rose-500/10">
+                              <Trash2 size={16}/>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
+          </div>
+        </main>
       </div>
     </div>
   )
