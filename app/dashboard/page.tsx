@@ -12,11 +12,10 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
-  Plus, Pencil, Trash2, Loader2, ArrowUpCircle, ArrowDownCircle,
-  Filter, Tag, CreditCard, Search
+  Plus, Pencil, Trash2, Loader2, ArrowUpCircle, ArrowDownCircle
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
+import { format, startOfMonth, endOfMonth } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
 
@@ -64,43 +63,31 @@ function ModalTransaccion({ userId, onRefresh, editData = null }: { userId: stri
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {editData ? (
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
-            <Pencil size={18}/>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white">
+            <Pencil size={16}/>
           </Button>
         ) : (
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 w-full md:w-auto shadow-lg shadow-emerald-900/20">
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 w-full md:w-auto shadow-lg">
             <Plus size={18} /> Nuevo Movimiento
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="bg-[#121212] border-white/10 text-white sm:max-w-[425px]">
-        <DialogHeader><DialogTitle>{editData ? "Editar Transacción" : "Nuevo Registro"}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Descripción</Label>
-            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Pago de servicios" className="bg-white/5 border-white/10" required />
-          </div>
+        <DialogHeader><DialogTitle>{editData ? "Editar" : "Nuevo"}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Descripción" className="bg-white/5 border-white/10" required />
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Monto</Label>
-              <Input name="monto" type="number" step="any" defaultValue={editData?.monto} placeholder="0.00" className="bg-white/5 border-white/10" required />
-            </div>
-            <div className="space-y-2">
-              <Label>Tipo</Label>
-              <Select name="tipo" defaultValue={editData?.tipo?.trim() || "Egreso"}>
-                <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-[#121212] border-white/10 text-white">
-                  <SelectItem value="Ingreso">Ingreso (+)</SelectItem>
-                  <SelectItem value="Egreso">Egreso (-)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Input name="monto" type="number" step="any" defaultValue={editData?.monto} placeholder="Monto" className="bg-white/5 border-white/10" required />
+            <Select name="tipo" defaultValue={editData?.tipo?.trim() || "Egreso"}>
+              <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#121212] border-white/10 text-white">
+                <SelectItem value="Ingreso">Ingreso</SelectItem>
+                <SelectItem value="Egreso">Egreso</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-2">
-            <Label>Categoría</Label>
-            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Comida" className="bg-white/5 border-white/10" required />
-          </div>
-          <Button type="submit" className="w-full bg-emerald-600 mt-2" disabled={loading}>{loading ? "Procesando..." : "Guardar"}</Button>
+          <Input name="categoria" defaultValue={editData?.categoria} placeholder="Categoría" className="bg-white/5 border-white/10" required />
+          <Button type="submit" className="w-full bg-emerald-600" disabled={loading}>{loading ? "Cargando..." : "Guardar"}</Button>
         </form>
       </DialogContent>
     </Dialog>
@@ -128,7 +115,7 @@ export default function TransaccionesPage() {
       const { data } = await supabase.from("transacciones").select("*")
         .eq("user_id", prof?.cedula)
         .gte("created_at", startOfMonth(baseDate).toISOString())
-        .lte("created_at", endOfMonth(baseDate).toISOString())
+        .lte("end_at", endOfMonth(baseDate).toISOString())
         .order("created_at", { ascending: false })
       setTransactions(data || [])
     } catch (e) { console.error(e) } finally { setLoading(false) }
@@ -137,10 +124,10 @@ export default function TransaccionesPage() {
   useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear])
 
   const handleEliminar = async (id: number) => {
-    if (confirm("¿Eliminar este registro permanentemente?")) {
+    if (confirm("¿Eliminar este registro?")) {
       await supabase.from("transacciones").delete().eq('id', id)
       fetchTransactions()
-      toast.success("Transacción eliminada")
+      toast.success("Eliminado")
     }
   }
 
@@ -153,19 +140,19 @@ export default function TransaccionesPage() {
       <div className={cn("transition-all duration-300 flex-1 flex flex-col", "ml-0", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar userName={profile?.full_name || "Usuario"} avatarUrl={profile?.avatar_url} onMenuClick={() => setMobileSidebarOpen(true)} />
 
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl mx-auto w-full">
-          {/* HEADER */}
+        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-5xl mx-auto w-full">
+          {/* HEADER RESPONSIVE */}
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter">Mis Movimientos</h1>
-              <p className="text-gray-500 text-sm">Registro de ingresos y egresos</p>
+              <p className="text-gray-500 text-xs font-bold uppercase">Visualizando {MONTHS[selectedMonth].label} {selectedYear}</p>
             </div>
-            <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex flex-col gap-3">
               <div className="flex bg-[#121212] border border-white/10 rounded-xl p-1 justify-between">
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-transparent border-none text-xs font-bold p-2 outline-none cursor-pointer">
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-transparent border-none text-xs font-bold p-2 outline-none">
                   {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
                 </select>
-                <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-transparent border-none text-xs font-bold p-2 outline-none cursor-pointer">
+                <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-transparent border-none text-xs font-bold p-2 outline-none">
                   {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
                 </select>
               </div>
@@ -173,26 +160,27 @@ export default function TransaccionesPage() {
             </div>
           </div>
 
-          {/* LISTA DE TRANSACCIONES */}
+          {/* LISTA DE TARJETAS */}
           <div className="grid gap-3">
             {loading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-emerald-500 h-8 w-8" /></div>
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-emerald-500" /></div>
             ) : transactions.length === 0 ? (
-              <div className="text-center py-20 text-gray-600 border border-dashed border-white/5 rounded-3xl font-medium">No se encontraron movimientos en este periodo.</div>
+              <div className="text-center py-20 text-gray-600 border border-dashed border-white/5 rounded-3xl">No hay registros este mes.</div>
             ) : (
               transactions.map(t => {
                 const isIngreso = t.tipo?.trim() === "Ingreso"
                 return (
                   <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-colors">
-                    <CardContent className="p-3 md:p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        {/* PARTE IZQUIERDA: ICONO Y TEXTO */}
+                    <CardContent className="p-3">
+                      <div className="flex flex-col gap-3">
+                        
+                        {/* PARTE SUPERIOR: ICONO + INFO */}
                         <div className="flex items-center gap-3">
-                          <div className={cn("p-2.5 rounded-2xl shrink-0", isIngreso ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500")}>
-                            {isIngreso ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
+                          <div className={cn("p-2 rounded-xl shrink-0", isIngreso ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500")}>
+                            {isIngreso ? <ArrowUpCircle size={20} /> : <ArrowDownCircle size={20} />}
                           </div>
-                          <div className="min-w-0">
-                            <h3 className="font-bold text-sm md:text-base text-gray-100 truncate pr-2">{t.descripcion}</h3>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-bold text-sm text-gray-100 truncate">{t.descripcion}</h3>
                             <div className="flex items-center gap-2 mt-0.5">
                               <Badge variant="outline" className="text-[9px] border-white/10 bg-white/5 text-gray-400 font-bold px-1.5 py-0 uppercase">{t.categoria}</Badge>
                               <span className="text-[10px] text-gray-600 font-bold uppercase">{format(new Date(t.created_at), "dd MMM", { locale: es })}</span>
@@ -200,25 +188,26 @@ export default function TransaccionesPage() {
                           </div>
                         </div>
 
-                        {/* PARTE DERECHA: MONTO Y BOTONES (SIEMPRE VISIBLES) */}
-                        <div className="flex items-center justify-between sm:justify-end gap-3 md:gap-6 border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
-                          <p className={cn("font-black text-base md:text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                        {/* PARTE INFERIOR: MONTO Y ACCIONES (ALINEADOS HORIZONTALMENTE) */}
+                        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1">
+                          <p className={cn("font-black text-lg tracking-tight", isIngreso ? "text-emerald-400" : "text-rose-400")}>
                             {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
                           </p>
                           
-                          {/* GRUPO DE ACCIONES */}
-                          <div className="flex items-center gap-1 border-l border-white/10 pl-2 md:pl-4">
+                          <div className="flex items-center gap-1 bg-white/5 rounded-lg px-1">
                             <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
+                            <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
                             <Button 
                               onClick={() => handleEliminar(t.id)} 
                               variant="ghost" 
                               size="icon" 
-                              className="h-9 w-9 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                              className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10"
                             >
-                              <Trash2 size={18}/>
+                              <Trash2 size={16}/>
                             </Button>
                           </div>
                         </div>
+
                       </div>
                     </CardContent>
                   </Card>
