@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Send, Copy, Target, MessageCircle } from "lucide-react" // Añadimos MessageCircle
+import { Send, Copy, Target, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 interface CedulaSectionProps {
@@ -10,10 +10,12 @@ interface CedulaSectionProps {
 }
 
 export function CedulaSection({ profile }: CedulaSectionProps) {
+  // 1. Modificamos la función para que copie la Cédula en lugar del ID largo
   const copyToClipboard = () => {
-    if (profile?.id) {
-      navigator.clipboard.writeText(profile.id)
-      toast.success("ID copiado")
+    const identifier = profile?.cedula || profile?.id;
+    if (identifier) {
+      navigator.clipboard.writeText(identifier)
+      toast.success(profile?.cedula ? "Cédula copiada" : "ID copiado")
     }
   }
 
@@ -56,10 +58,14 @@ export function CedulaSection({ profile }: CedulaSectionProps) {
 
         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 group relative">
           <div className="flex flex-col gap-1">
-            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-tighter">ID de Cuenta</span>
+            {/* 2. Cambiamos la etiqueta visual */}
+            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-tighter">
+              Cédula / ID Fiscal
+            </span>
             <div className="flex items-center justify-between">
+              {/* 3. Mostramos profile.cedula en lugar de profile.id */}
               <code className="text-[10px] text-slate-600 font-mono truncate max-w-[180px]">
-                {profile?.id || "Cargando..."}
+                {profile?.cedula || profile?.id || "Cargando..."}
               </code>
               <Button 
                 variant="ghost" 
@@ -73,9 +79,7 @@ export function CedulaSection({ profile }: CedulaSectionProps) {
           </div>
         </div>
 
-        {/* --- SECCIÓN DE BOTONES --- */}
         <div className="space-y-2">
-          {/* Botón Telegram */}
           <Button 
             className="w-full bg-[#0088cc] hover:bg-[#0077b5] text-white font-bold h-10 rounded-lg shadow-sm gap-2 transition-transform active:scale-[0.98]"
             onClick={() => window.open('https://t.me/Lex_Mis_Finanzas_bot', '_blank')}
@@ -84,7 +88,6 @@ export function CedulaSection({ profile }: CedulaSectionProps) {
             Vincular Telegram
           </Button>
 
-          {/* Botón WhatsApp */}
           <Button 
             className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold h-10 rounded-lg shadow-sm gap-2 transition-transform active:scale-[0.98]"
             onClick={() => window.open('https://wa.me/573054164092', '_blank')}
@@ -95,7 +98,7 @@ export function CedulaSection({ profile }: CedulaSectionProps) {
         </div>
         
         <p className="text-[9px] text-center text-slate-400">
-          Usa tu ID para recibir alertas de gastos en tiempo real
+          Usa tu Cédula para recibir alertas de gastos en tiempo real
         </p>
       </CardContent>
     </Card>
