@@ -40,14 +40,12 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // 1. Obtenemos datos de user_profiles
         const { data: profileData } = await supabase
           .from("user_profiles")
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
         
-        // 2. Obtenemos datos estéticos de profiles
         const { data: mainProfile } = await supabase
           .from("profiles")
           .select("avatar_url, background_image")
@@ -66,8 +64,7 @@ export default function DashboardPage() {
           const rangeFrom = startOfMonth(baseDate)
           const rangeTo = endOfMonth(baseDate)
 
-          // --- CAMBIO SOLICITADO: Solo usamos la cédula ---
-          // Si no tiene cédula, el valor será null y la consulta no traerá nada (quedará en blanco)
+          // CAMBIO: Solo usamos cédula. Si es nula, no traerá transacciones.
           const filterValue = profileData.cedula 
 
           if (filterValue) {
@@ -91,9 +88,6 @@ export default function DashboardPage() {
 
               setTotals({ income, expenses, balance: income - expenses })
             }
-          } else {
-            // Si no hay cédula, reseteamos totales a cero
-            setTotals({ income: 0, expenses: 0, balance: 0 })
           }
         }
       } catch (err) {
@@ -105,7 +99,6 @@ export default function DashboardPage() {
     fetchData()
   }, [supabase, selectedMonth, selectedYear])
 
-  // --- LÓGICA DE TEMAS Y FONDO (SIN CAMBIOS) ---
   const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
   const activeBgColor = theme?.background_color || "#F3F4F6"
   const activeTextColor = theme?.text_color || "#1e293b"
