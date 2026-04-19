@@ -283,27 +283,30 @@ export default function TransaccionesPage() {
                 const isIngreso = t.tipo?.trim() === "Ingreso"
                 return (
                   <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200 overflow-hidden">
-                    <CardContent className="p-4 flex flex-col gap-4">
+                    <CardContent className="p-4 flex flex-col gap-3">
+                      
                       {/* FILA 1: ICONO E INFO PRINCIPAL */}
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className={cn(
-                            "p-3 rounded-2xl shrink-0",
-                            isIngreso ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
-                          )}>
-                            {isIngreso ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
-                          </div>
-                          <div className="space-y-0.5 min-w-0">
-                            <h3 className="font-bold text-gray-100 text-sm md:text-base truncate">{t.descripcion || "Transacción"}</h3>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter">
-                                {format(new Date(t.created_at), "dd MMM, yyyy", { locale: es })}
-                              </span>
-                            </div>
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "p-3 rounded-2xl shrink-0",
+                          isIngreso ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                        )}>
+                          {isIngreso ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-100 text-sm md:text-base truncate leading-tight">{t.descripcion || "Transacción"}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter shrink-0">
+                              {format(new Date(t.created_at), "dd MMM, yyyy", { locale: es })}
+                            </span>
+                            {/* TAG DEBAJO DEL NOMBRE EN MÓVIL (Ubicación optimizada) */}
+                            <Badge variant="outline" className="text-[9px] uppercase border-white/10 bg-white/5 text-gray-400 font-black px-2 py-0 truncate max-w-[120px]">
+                              <Tag size={10} className="mr-1 shrink-0" /> {t.categoria || "General"}
+                            </Badge>
                           </div>
                         </div>
                         
-                        {/* MONTO EN ESCRITORIO (Se oculta en móvil para usar la fila inferior) */}
+                        {/* MONTO EN ESCRITORIO (Hidden en móvil para usar la fila inferior) */}
                         <div className="hidden md:block text-right">
                            <p className={cn("font-black text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
                             {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
@@ -311,32 +314,22 @@ export default function TransaccionesPage() {
                         </div>
                       </div>
 
-                      {/* FILA 2: CATEGORÍA, MONTO MÓVIL Y ACCIONES */}
-                      <div className="flex items-center justify-between border-t border-white/5 pt-3 md:pt-0 md:border-t-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[9px] uppercase border-white/10 bg-white/5 text-gray-400 font-black px-2 py-0">
-                            <Tag size={10} className="mr-1" /> {t.categoria || "General"}
-                          </Badge>
-                        </div>
+                      {/* FILA 2 (Solo Móvil): MONTO Y ACCIONES CON MÁS ESPACIO */}
+                      <div className="flex md:hidden items-center justify-between border-t border-white/5 pt-3">
+                        <p className={cn("font-black text-base tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                          {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
+                        </p>
 
-                        {/* ACCIONES Y MONTO (Móvil) */}
-                        <div className="flex items-center gap-3">
-                          {/* Monto visible solo en móvil aquí */}
-                          <p className={cn("md:hidden font-black text-base tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
-                            {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
-                          </p>
-
-                          <div className="flex items-center gap-1 border-l border-white/10 pl-2">
-                            <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
-                            <Button 
-                              onClick={() => handleEliminar(t.id)} 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-9 w-9 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                            >
-                              <Trash2 size={17}/>
-                            </Button>
-                          </div>
+                        <div className="flex items-center gap-1 border-l border-white/10 pl-2">
+                          <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
+                          <Button 
+                            onClick={() => handleEliminar(t.id)} 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-9 w-9 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          >
+                            <Trash2 size={17}/>
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
