@@ -40,14 +40,14 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // --- CORRECCIÓN CLAVE: Usamos 'user_profiles' como en tu código de transacciones ---
+        // 1. Obtenemos datos de user_profiles
         const { data: profileData } = await supabase
           .from("user_profiles")
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
         
-        // También traemos el avatar de 'profiles' si existe
+        // 2. Obtenemos datos estéticos de profiles
         const { data: mainProfile } = await supabase
           .from("profiles")
           .select("avatar_url, background_image")
@@ -62,30 +62,38 @@ export default function DashboardPage() {
           }
           setProfile(fullProfile)
           
-          // --- LÓGICA DE FILTRADO IGUAL A TRANSACCIONES ---
           const baseDate = new Date(selectedYear, selectedMonth, 1)
           const rangeFrom = startOfMonth(baseDate)
           const rangeTo = endOfMonth(baseDate)
 
-          const { data: transData, error } = await supabase
-            .from("transacciones")
-            .select("monto, tipo")
-            .eq("user_id", profileData.cedula || user.id) // Filtra por cédula
-            .gte("created_at", startOfDay(rangeFrom).toISOString())
-            .lte("created_at", endOfDay(rangeTo).toISOString())
+          // --- CAMBIO SOLICITADO: Solo usamos la cédula ---
+          // Si no tiene cédula, el valor será null y la consulta no traerá nada (quedará en blanco)
+          const filterValue = profileData.cedula 
 
-          if (error) throw error
+          if (filterValue) {
+            const { data: transData, error } = await supabase
+              .from("transacciones")
+              .select("monto, tipo")
+              .eq("user_id", filterValue) 
+              .gte("created_at", startOfDay(rangeFrom).toISOString())
+              .lte("created_at", endOfDay(rangeTo).toISOString())
 
-          if (transData) {
-            const income = transData
-              .filter((t: any) => t.tipo?.trim() === "Ingreso")
-              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-            
-            const expenses = transData
-              .filter((t: any) => t.tipo?.trim() === "Egreso")
-              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+            if (error) throw error
 
-            setTotals({ income, expenses, balance: income - expenses })
+            if (transData) {
+              const income = transData
+                .filter((t: any) => t.tipo?.trim() === "Ingreso")
+                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+              
+              const expenses = transData
+                .filter((t: any) => t.tipo?.trim() === "Egreso")
+                .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+
+              setTotals({ income, expenses, balance: income - expenses })
+            }
+          } else {
+            // Si no hay cédula, reseteamos totales a cero
+            setTotals({ income: 0, expenses: 0, balance: 0 })
           }
         }
       } catch (err) {
@@ -97,7 +105,7 @@ export default function DashboardPage() {
     fetchData()
   }, [supabase, selectedMonth, selectedYear])
 
-  // --- LÓGICA DE TEMAS Y FONDO ---
+  // --- LÓGICA DE TEMAS Y FONDO (SIN CAMBIOS) ---
   const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
   const activeBgColor = theme?.background_color || "#F3F4F6"
   const activeTextColor = theme?.text_color || "#1e293b"
