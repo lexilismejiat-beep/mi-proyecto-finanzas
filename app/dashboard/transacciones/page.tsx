@@ -80,7 +80,7 @@ function ModalTransaccion({
             <Pencil size={17}/>
           </Button>
         ) : (
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg shadow-emerald-900/20">
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg shadow-emerald-900/20 w-full md:w-auto">
             <Plus size={18} /> Nuevo Movimiento
           </Button>
         )}
@@ -196,7 +196,7 @@ export default function TransaccionesPage() {
   const egresos = transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (t.monto || 0), 0)
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden">
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
@@ -206,7 +206,7 @@ export default function TransaccionesPage() {
           onMenuClick={() => setMobileSidebarOpen(true)} 
         />
         
-        <main className="p-4 sm:p-8 space-y-6 max-w-6xl mx-auto">
+        <main className="p-4 sm:p-8 space-y-6 max-w-6xl mx-auto w-full">
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -217,8 +217,8 @@ export default function TransaccionesPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex bg-[#121212] border border-white/10 rounded-xl p-1">
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="flex bg-[#121212] border border-white/10 rounded-xl p-1 flex-1 md:flex-none justify-center">
                 <select 
                   value={selectedMonth} 
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -247,7 +247,7 @@ export default function TransaccionesPage() {
                 <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-500"><ArrowUpCircle size={24} /></div>
                 <div>
                   <p className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest">Total Ingresos</p>
-                  <p className="text-3xl font-black">{formatCurrency(ingresos)}</p>
+                  <p className="text-2xl md:text-3xl font-black">{formatCurrency(ingresos)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -257,7 +257,7 @@ export default function TransaccionesPage() {
                 <div className="p-3 bg-rose-500/20 rounded-2xl text-rose-500"><ArrowDownCircle size={24} /></div>
                 <div>
                   <p className="text-[10px] text-rose-500/70 uppercase font-black tracking-widest">Total Gastos</p>
-                  <p className="text-3xl font-black">{formatCurrency(egresos)}</p>
+                  <p className="text-2xl md:text-3xl font-black">{formatCurrency(egresos)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -282,8 +282,10 @@ export default function TransaccionesPage() {
               transactions.map(t => {
                 const isIngreso = t.tipo?.trim() === "Ingreso"
                 return (
-                  <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200">
-                    <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200 overflow-hidden">
+                    <CardContent className="p-4 flex flex-col gap-3">
+                      
+                      {/* FILA 1: ICONO E INFO PRINCIPAL */}
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "p-3 rounded-2xl shrink-0",
@@ -291,28 +293,34 @@ export default function TransaccionesPage() {
                         )}>
                           {isIngreso ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
                         </div>
-                        <div className="space-y-1">
-                          <h3 className="font-bold text-gray-100 text-sm md:text-base line-clamp-1">{t.descripcion || "Transacción"}</h3>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="text-[9px] uppercase border-white/10 bg-white/5 text-gray-400 font-black px-2 py-0">
-                              <Tag size={10} className="mr-1" /> {t.categoria || "General"}
-                            </Badge>
-                            <span className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-100 text-sm md:text-base truncate leading-tight">{t.descripcion || "Transacción"}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter shrink-0">
                               {format(new Date(t.created_at), "dd MMM, yyyy", { locale: es })}
                             </span>
+                            {/* TAG DEBAJO DEL NOMBRE EN MÓVIL (Ubicación optimizada) */}
+                            <Badge variant="outline" className="text-[9px] uppercase border-white/10 bg-white/5 text-gray-400 font-black px-2 py-0 truncate max-w-[120px]">
+                              <Tag size={10} className="mr-1 shrink-0" /> {t.categoria || "General"}
+                            </Badge>
                           </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 md:gap-6 shrink-0">
-                        <div className="text-right">
-                          <p className={cn("font-black text-base md:text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                        
+                        {/* MONTO EN ESCRITORIO (Hidden en móvil para usar la fila inferior) */}
+                        <div className="hidden md:block text-right">
+                           <p className={cn("font-black text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
                             {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
                           </p>
                         </div>
-                        
-                        {/* BOTONES SIEMPRE VISIBLES */}
-                        <div className="flex items-center gap-1 border-l border-white/10 pl-2 md:pl-4 ml-1 md:ml-2">
+                      </div>
+
+                      {/* FILA 2 (Solo Móvil): MONTO Y ACCIONES CON MÁS ESPACIO */}
+                      <div className="flex md:hidden items-center justify-between border-t border-white/5 pt-3">
+                        <p className={cn("font-black text-base tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                          {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
+                        </p>
+
+                        <div className="flex items-center gap-1 border-l border-white/10 pl-2">
                           <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
                           <Button 
                             onClick={() => handleEliminar(t.id)} 
