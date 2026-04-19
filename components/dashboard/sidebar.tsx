@@ -10,12 +10,13 @@ import {
   ArrowUpDown,
   PieChart,
   Settings,
-  CreditCard, // Usaremos este para Pagos
+  CreditCard,
   TrendingUp,
   ChevronLeft,
   ChevronRight,
   Wallet,
   Bell,
+  Fingerprint, // Icono para la sección de cédula
 } from "lucide-react"
 
 interface NavItem {
@@ -24,14 +25,13 @@ interface NavItem {
   href: string
 }
 
-// 1. ACTUALIZACIÓN: Añadimos "Suscripción" a la lista de navegación
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: ArrowUpDown, label: "Transacciones", href: "/dashboard/transacciones" },
   { icon: PieChart, label: "Categorías", href: "/dashboard/categorias" },
   { icon: TrendingUp, label: "Reportes", href: "/dashboard/reportes" },
   { icon: Bell, label: "Recordatorios", href: "/dashboard/recordatorios" },
-  { icon: CreditCard, label: "Suscripción", href: "/dashboard/pagos" }, // Nueva ruta
+  { icon: CreditCard, label: "Suscripción", href: "/dashboard/pagos" },
   { icon: Settings, label: "Configuración", href: "/dashboard/configuracion" },
 ]
 
@@ -41,6 +41,7 @@ interface SidebarProps {
   mobileOpen?: boolean
   onMobileOpenChange?: (open: boolean) => void
   sidebarColor?: string
+  userCedula?: string // <--- NUEVA PROP
 }
 
 function isColorLight(color: string): boolean {
@@ -58,7 +59,8 @@ export function Sidebar({
   onCollapsedChange,
   mobileOpen = false,
   onMobileOpenChange,
-  sidebarColor: propColor = "#1f2937"
+  sidebarColor: propColor = "#1f2937",
+  userCedula // <--- RECIBIMOS LA CÉDULA
 }: SidebarProps) {
   const pathname = usePathname()
   const supabase = createClientComponentClient()
@@ -144,18 +146,6 @@ export function Sidebar({
                   backgroundColor: isActive ? activeBg : "transparent",
                   color: isActive ? textColor : textColorMuted,
                 }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = hoverBg
-                    e.currentTarget.style.color = textColor
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = "transparent"
-                    e.currentTarget.style.color = textColorMuted
-                  }
-                }}
               >
                 <item.icon className="h-5 w-5 shrink-0" />
                 {!collapsed && <span>{item.label}</span>}
@@ -163,6 +153,21 @@ export function Sidebar({
             );
           })}
         </nav>
+
+        {/* --- SECCIÓN DE IDENTIDAD (Donde salía el UUID) --- */}
+        {!collapsed && (
+          <div className="mx-3 mb-2 p-3 rounded-xl bg-white/10 backdrop-blur-sm border border-white/10">
+            <div className="flex items-center gap-2 mb-1">
+              <Fingerprint className="h-3 w-3" style={{ color: textColorMuted }} />
+              <span className="text-[10px] uppercase tracking-wider font-bold" style={{ color: textColorMuted }}>
+                ID Fiscal / Cédula
+              </span>
+            </div>
+            <code className="text-xs font-mono font-bold block truncate" style={{ color: textColor }}>
+              {userCedula || "No asignada"}
+            </code>
+          </div>
+        )}
 
         <div 
           className="p-3"
@@ -172,14 +177,6 @@ export function Sidebar({
             onClick={() => setCollapsed(!collapsed)}
             className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
             style={{ color: textColorMuted }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = hoverBg
-              e.currentTarget.style.color = textColor
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent"
-              e.currentTarget.style.color = textColorMuted
-            }}
           >
             {collapsed ? (
               <ChevronRight className="h-5 w-5" />
