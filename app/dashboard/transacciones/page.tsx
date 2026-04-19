@@ -4,12 +4,22 @@ import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
-import { Loader2, Calendar as CalendarIcon, AlertCircle, Pencil, Trash2 } from "lucide-react" // Añadimos iconos
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { 
+  Plus, Pencil, Trash2, Calendar, 
+  AlertCircle, Loader2, ArrowUpCircle, ArrowDownCircle,
+  Filter, Tag, CreditCard, Search
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { useThemeSettings } from "@/lib/theme-context"
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
+import { es } from "date-fns/locale"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button" // Asegúrate de tener este componente
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -20,15 +30,111 @@ const MONTHS = [
   { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
 ]
 
+// --- COMPONENTE DE FORMULARIO MODAL ---
+function ModalTransaccion({ 
+  userId, 
+  onRefresh, 
+  editData = null 
+}: { 
+  userId: string, 
+  onRefresh: () => void, 
+  editData?: any 
+}) {
+  const supabase = createClient()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    const formData = new FormData(e.currentTarget)
+
+    const payload = {
+      descripcion: formData.get("descripcion"),
+      monto: parseFloat(formData.get("monto") as string),
+      tipo: formData.get("tipo"),
+      categoria: formData.get("categoria"),
+      user_id: userId,
+      created_at: editData ? editData.created_at : new Date().toISOString()
+    }
+
+    const { error } = editData 
+      ? await supabase.from("transacciones").update(payload).eq('id', editData.id)
+      : await supabase.from("transacciones").insert([payload])
+
+    if (error) {
+      toast.error("Error: " + error.message)
+    } else {
+      toast.success(editData ? "Transacción actualizada" : "¡Transacción registrada!")
+      setOpen(false)
+      onRefresh()
+    }
+    setLoading(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {editData ? (
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white">
+            <Pencil size={16}/>
+          </Button>
+        ) : (
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+            <Plus size={18} /> Nuevo Movimiento
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="bg-[#121212] border-white/10 text-white sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+            <CreditCard className={editData ? "text-blue-500" : "text-emerald-500"} /> 
+            {editData ? "Editar Transacción" : "Nuevo Registro"}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Descripción</Label>
+            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Compra en supermercado" className="bg-white/5 border-white/10" required />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Monto ($)</Label>
+              <Input name="monto" type="number" step="any" defaultValue={editData?.monto} placeholder="50000" className="bg-white/5 border-white/10" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select name="tipo" defaultValue={editData?.tipo?.trim() || "Egreso"}>
+                <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-[#121212] border-white/10 text-white">
+                  <SelectItem value="Ingreso">Ingreso (+)</SelectItem>
+                  <SelectItem value="Egreso">Egreso (-)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categoría</Label>
+            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Comida, Salud, Transporte" className="bg-white/5 border-white/10" required />
+          </div>
+
+          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2" disabled={loading}>
+            {loading ? "Procesando..." : editData ? "Guardar Cambios" : "Registrar Transacción"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// --- PÁGINA PRINCIPAL ---
 export default function TransaccionesPage() {
   const supabase = createClient()
-  const { theme } = useThemeSettings()
-
-  // Estados de interfaz
+  
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  
-  // Estados de datos
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
@@ -36,248 +142,186 @@ export default function TransaccionesPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
-  // --- NUEVAS FUNCIONES DE CONTROL ---
-
-  // 1. Función para Eliminar
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar esta transacción?")) return
-
+  const fetchTransactions = async () => {
     try {
-      const { error } = await supabase
-        .from("transacciones")
-        .delete()
-        .eq("id", id)
-
-      if (error) throw error
-
-      setTransactions(transactions.filter(t => t.id !== id))
-      toast.success("Transacción eliminada")
-    } catch (err) {
-      console.error(err)
-      toast.error("No se pudo eliminar el registro")
-    }
-  }
-
-  // 2. Función para Editar (Ejemplo rápido con prompt, puedes luego usar un Modal)
-  const handleEdit = async (transaction: any) => {
-    const nuevaDescripcion = prompt("Nueva descripción:", transaction.descripcion)
-    const nuevoMonto = prompt("Nuevo monto:", transaction.monto)
-
-    if (nuevaDescripcion === null || nuevoMonto === null) return
-
-    try {
-      const { error } = await supabase
-        .from("transacciones")
-        .update({ 
-          descripcion: nuevaDescripcion, 
-          monto: parseFloat(nuevoMonto) 
-        })
-        .eq("id", transaction.id)
-
-      if (error) throw error
-
-      setTransactions(transactions.map(t => 
-        t.id === transaction.id 
-          ? { ...t, descripcion: nuevaDescripcion, monto: parseFloat(nuevoMonto) } 
-          : t
-      ))
-      toast.success("Transacción actualizada")
-    } catch (err) {
-      console.error(err)
-      toast.error("Error al actualizar")
-    }
-  }
-
-  // --- FIN NUEVAS FUNCIONES ---
-
-  // 1. Cargar Perfil
-  useEffect(() => {
-    async function loadUser() {
+      setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Cargar Perfil
       const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
       const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
       
       if (profileData) {
-        setProfile({
-          ...profileData,
-          avatar_url: mainProfile?.avatar_url || profileData.avatar_url
-        })
+        setProfile({ ...profileData, avatar_url: mainProfile?.avatar_url || profileData.avatar_url })
       }
+
+      const baseDate = new Date(selectedYear, selectedMonth, 1)
+      const rangeFrom = startOfMonth(baseDate)
+      const rangeTo = endOfMonth(baseDate)
+
+      const userIdToFilter = profileData?.cedula || user.id
+
+      const { data, error } = await supabase
+        .from("transacciones")
+        .select("*")
+        .eq("user_id", userIdToFilter)
+        .gte("created_at", startOfDay(rangeFrom).toISOString())
+        .lte("created_at", endOfDay(rangeTo).toISOString())
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      setTransactions(data || [])
+    } catch (err) {
+      console.error(err)
+      toast.error("Error al cargar transacciones")
+    } finally {
+      setLoading(false)
     }
-    loadUser()
-  }, [])
+  }
 
-  // 2. Carga de Transacciones
-  useEffect(() => {
-    async function fetchTransactions() {
-      try {
-        setLoading(true)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+  useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear])
 
-        const baseDate = new Date(selectedYear, selectedMonth, 1)
-        const rangeFrom = startOfMonth(baseDate)
-        const rangeTo = endOfMonth(baseDate)
+  const handleEliminar = async (id: number) => {
+    if (!confirm("¿Eliminar esta transacción permanentemente?")) return
+    const { error } = await supabase.from("transacciones").delete().eq('id', id)
+    if (error) toast.error("Error al borrar")
+    else { toast.success("Transacción eliminada"); fetchTransactions(); }
+  }
 
-        let query = supabase
-          .from("transacciones")
-          .select("*")
-          .gte("created_at", startOfDay(rangeFrom).toISOString())
-          .lte("created_at", endOfDay(rangeTo).toISOString())
-          .order("created_at", { ascending: false })
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(amount)
+  }
 
-        const userIdToFilter = profile?.cedula || user.id
-        query = query.eq("user_id", userIdToFilter)
-
-        const { data, error } = await query
-        if (error) throw error
-        setTransactions(data || [])
-      } catch (err) {
-        console.error(err)
-        toast.error("Error al sincronizar datos")
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchTransactions()
-  }, [selectedMonth, selectedYear, profile?.cedula])
+  // Cálculos de resumen
+  const ingresos = transactions.filter(t => t.tipo?.trim() === "Ingreso").reduce((acc, t) => acc + (t.monto || 0), 0)
+  const egresos = transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (t.monto || 0), 0)
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
-        onCollapsedChange={setSidebarCollapsed} 
-        mobileOpen={mobileSidebarOpen} 
-        onMobileOpenChange={setMobileSidebarOpen} 
-      />
+      <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
 
-      <div className={cn(
-        "transition-all duration-300",
-        "lg:ml-64",
-        sidebarCollapsed && "lg:ml-16"
-      )}>
+      <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
         <TopBar 
           userName={profile ? `${profile.nombres}` : "Usuario"} 
           avatarUrl={profile?.avatar_url}
-          onMenuClick={() => setMobileSidebarOpen(true)}
+          onMenuClick={() => setMobileSidebarOpen(true)} 
         />
         
-        <main className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <main className="p-4 sm:p-8 space-y-6 max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Mis Movimientos</h1>
-              <p className="text-gray-400 text-sm">Visualizando {MONTHS[selectedMonth].label} {selectedYear}</p>
+              <h1 className="text-3xl font-bold tracking-tight">Mis Movimientos</h1>
+              <p className="text-gray-400 text-sm flex items-center gap-2">
+                <Filter size={14} className="text-emerald-500" />
+                Filtrando por {MONTHS[selectedMonth].label} {selectedYear}
+              </p>
             </div>
 
-            <div className="flex items-center w-full md:w-auto gap-2 bg-[#121212] p-2 rounded-xl border border-white/10">
-              <CalendarIcon className="ml-2 h-4 w-4 text-emerald-500" />
-              <select 
-                value={selectedMonth} 
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="bg-transparent border-none focus:ring-0 text-sm font-medium cursor-pointer p-1 flex-1 md:flex-none"
-              >
-                {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
-              </select>
-              
-              <select 
-                value={selectedYear} 
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="bg-transparent border-none focus:ring-0 text-sm font-medium cursor-pointer p-1 border-l border-white/10"
-              >
-                {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
-              </select>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex bg-[#121212] border border-white/10 rounded-xl p-1">
+                <select 
+                  value={selectedMonth} 
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer px-3 py-1.5"
+                >
+                  {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
+                </select>
+                <div className="w-px bg-white/10 my-1"></div>
+                <select 
+                  value={selectedYear} 
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer px-3 py-1.5"
+                >
+                  {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
+                </select>
+              </div>
+              <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} />
             </div>
           </div>
 
-          <div className="bg-[#121212] rounded-2xl border border-white/5 overflow-hidden">
+          {/* Resumen Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-emerald-500/5 border-emerald-500/10">
+              <CardContent className="p-4 flex items-center gap-4">
+                <ArrowUpCircle className="text-emerald-500 h-10 w-10" />
+                <div>
+                  <p className="text-[10px] text-emerald-500 uppercase font-black tracking-widest">Ingresos del Mes</p>
+                  <p className="text-2xl font-black">{formatCurrency(ingresos)}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-rose-500/5 border-rose-500/10">
+              <CardContent className="p-4 flex items-center gap-4">
+                <ArrowDownCircle className="text-rose-500 h-10 w-10" />
+                <div>
+                  <p className="text-[10px] text-rose-500 uppercase font-black tracking-widest">Gastos del Mes</p>
+                  <p className="text-2xl font-black">{formatCurrency(egresos)}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Lista de Transacciones */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <Search size={14} /> Historial de transacciones
+            </h2>
+
             {loading ? (
-              <div className="p-20 flex flex-col items-center gap-4">
-                <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
-                <p className="text-gray-500 animate-pulse">Cargando...</p>
+              <div className="py-20 flex flex-col items-center gap-4">
+                <Loader2 className="animate-spin text-emerald-500 h-10 w-10" />
+                <p className="text-gray-500">Sincronizando movimientos...</p>
               </div>
             ) : transactions.length === 0 ? (
-              <div className="p-20 text-center">
-                <AlertCircle className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">No hay registros.</p>
+              <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
+                No hay transacciones registradas en este periodo.
               </div>
             ) : (
-              <>
-                {/* MÓVIL */}
-                <div className="block md:hidden divide-y divide-white/5">
-                  {transactions.map((t) => (
-                    <div key={t.id} className="p-4 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-gray-100">{t.descripcion || "Sin nombre"}</p>
-                          <p className="text-[10px] text-gray-500 uppercase tracking-wider">{format(new Date(t.created_at), "dd MMM, yyyy")}</p>
+              transactions.map(t => {
+                const isIngreso = t.tipo?.trim() === "Ingreso"
+                return (
+                  <Card key={t.id} className="group bg-[#121212] border-white/5 hover:border-white/10 transition-all">
+                    <CardContent className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "p-3 rounded-2xl shrink-0",
+                          isIngreso ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                        )}>
+                          {isIngreso ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                           <p className={cn(
-                            "font-bold",
-                            t.tipo?.trim() === "Ingreso" ? "text-emerald-400" : "text-rose-400"
-                          )}>
-                            {t.tipo?.trim() === "Ingreso" ? "+" : "-"}${Number(t.monto).toLocaleString('es-CO')}
-                          </p>
-                          {/* Botones Móvil */}
-                          <div className="flex gap-2">
-                            <button onClick={() => handleEdit(t)} className="p-1 text-gray-500 hover:text-white"><Pencil className="h-3 w-3"/></button>
-                            <button onClick={() => handleDelete(t.id)} className="p-1 text-gray-500 hover:text-rose-500"><Trash2 className="h-3 w-3"/></button>
+                        <div className="space-y-1">
+                          <h3 className="font-bold text-gray-100">{t.descripcion || "Sin descripción"}</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[9px] uppercase border-white/10 text-gray-500 font-bold px-1.5 py-0">
+                              <Tag size={10} className="mr-1" /> {t.categoria || "Otros"}
+                            </Badge>
+                            <span className="text-[10px] text-gray-600 font-medium">
+                              {format(new Date(t.created_at), "dd MMM, yyyy", { locale: es })}
+                            </span>
                           </div>
                         </div>
                       </div>
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 text-[9px] text-gray-400 border border-white/10 uppercase">
-                        {t.categoria}
-                      </span>
-                    </div>
-                  ))}
-                </div>
 
-                {/* DESKTOP */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
-                      <tr>
-                        <th className="p-4 font-semibold">Fecha</th>
-                        <th className="p-4 font-semibold">Descripción</th>
-                        <th className="p-4 font-semibold">Categoría</th>
-                        <th className="p-4 font-semibold text-right">Monto</th>
-                        <th className="p-4 font-semibold text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {transactions.map((t) => (
-                        <tr key={t.id} className="hover:bg-white/[0.02] transition-colors group">
-                          <td className="p-4 text-sm text-gray-400">{format(new Date(t.created_at), "dd/MM/yyyy")}</td>
-                          <td className="p-4 font-medium">{t.descripcion || "Gasto sin nombre"}</td>
-                          <td className="p-4">
-                            <span className="px-2 py-1 rounded-md bg-white/5 text-[10px] text-gray-400 border border-white/10 uppercase">
-                              {t.categoria}
-                            </span>
-                          </td>
-                          <td className={cn(
-                            "p-4 text-right font-bold",
-                            t.tipo?.trim() === "Ingreso" ? "text-emerald-400" : "text-rose-400"
-                          )}>
-                            {t.tipo?.trim() === "Ingreso" ? "+" : "-"}${Number(t.monto).toLocaleString('es-CO')}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white" onClick={() => handleEdit(t)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-rose-500" onClick={() => handleDelete(t.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className={cn("font-black text-lg", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                            {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
+                          </p>
+                        </div>
+                        
+                        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                          <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
+                          <Button onClick={() => handleEliminar(t.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:bg-rose-500/10">
+                            <Trash2 size={16}/>
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })
             )}
           </div>
         </main>
