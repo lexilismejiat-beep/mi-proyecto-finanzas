@@ -76,11 +76,11 @@ function ModalTransaccion({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {editData ? (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white">
-            <Pencil size={16}/>
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+            <Pencil size={17}/>
           </Button>
         ) : (
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg shadow-emerald-900/20">
             <Plus size={18} /> Nuevo Movimiento
           </Button>
         )}
@@ -95,7 +95,7 @@ function ModalTransaccion({
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Descripción</Label>
-            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Compra en supermercado" className="bg-white/5 border-white/10" required />
+            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Pago de Nómina" className="bg-white/5 border-white/10" required />
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -117,7 +117,7 @@ function ModalTransaccion({
 
           <div className="space-y-2">
             <Label>Categoría</Label>
-            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Comida, Salud, Transporte" className="bg-white/5 border-white/10" required />
+            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Alimentación" className="bg-white/5 border-white/10" required />
           </div>
 
           <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2" disabled={loading}>
@@ -148,7 +148,6 @@ export default function TransaccionesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Cargar Perfil
       const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
       const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
       
@@ -174,7 +173,7 @@ export default function TransaccionesPage() {
       setTransactions(data || [])
     } catch (err) {
       console.error(err)
-      toast.error("Error al cargar transacciones")
+      toast.error("Error al cargar datos")
     } finally {
       setLoading(false)
     }
@@ -183,17 +182,16 @@ export default function TransaccionesPage() {
   useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear])
 
   const handleEliminar = async (id: number) => {
-    if (!confirm("¿Eliminar esta transacción permanentemente?")) return
+    if (!confirm("¿Eliminar este registro?")) return
     const { error } = await supabase.from("transacciones").delete().eq('id', id)
     if (error) toast.error("Error al borrar")
-    else { toast.success("Transacción eliminada"); fetchTransactions(); }
+    else { toast.success("Eliminado correctamente"); fetchTransactions(); }
   }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(amount)
   }
 
-  // Cálculos de resumen
   const ingresos = transactions.filter(t => t.tipo?.trim() === "Ingreso").reduce((acc, t) => acc + (t.monto || 0), 0)
   const egresos = transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (t.monto || 0), 0)
 
@@ -212,10 +210,10 @@ export default function TransaccionesPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Mis Movimientos</h1>
+              <h1 className="text-3xl font-black tracking-tighter uppercase italic">Movimientos</h1>
               <p className="text-gray-400 text-sm flex items-center gap-2">
                 <Filter size={14} className="text-emerald-500" />
-                Filtrando por {MONTHS[selectedMonth].label} {selectedYear}
+                {MONTHS[selectedMonth].label} {selectedYear}
               </p>
             </div>
 
@@ -224,7 +222,7 @@ export default function TransaccionesPage() {
                 <select 
                   value={selectedMonth} 
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer px-3 py-1.5"
+                  className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5"
                 >
                   {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
                 </select>
@@ -232,7 +230,7 @@ export default function TransaccionesPage() {
                 <select 
                   value={selectedYear} 
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer px-3 py-1.5"
+                  className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5"
                 >
                   {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
                 </select>
@@ -243,21 +241,23 @@ export default function TransaccionesPage() {
 
           {/* Resumen Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-emerald-500/5 border-emerald-500/10">
-              <CardContent className="p-4 flex items-center gap-4">
-                <ArrowUpCircle className="text-emerald-500 h-10 w-10" />
+            <Card className="bg-emerald-500/5 border-emerald-500/10 overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowUpCircle size={80} /></div>
+              <CardContent className="p-5 flex items-center gap-4 relative">
+                <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-500"><ArrowUpCircle size={24} /></div>
                 <div>
-                  <p className="text-[10px] text-emerald-500 uppercase font-black tracking-widest">Ingresos del Mes</p>
-                  <p className="text-2xl font-black">{formatCurrency(ingresos)}</p>
+                  <p className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest">Total Ingresos</p>
+                  <p className="text-3xl font-black">{formatCurrency(ingresos)}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-rose-500/5 border-rose-500/10">
-              <CardContent className="p-4 flex items-center gap-4">
-                <ArrowDownCircle className="text-rose-500 h-10 w-10" />
+            <Card className="bg-rose-500/5 border-rose-500/10 overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowDownCircle size={80} /></div>
+              <CardContent className="p-5 flex items-center gap-4 relative">
+                <div className="p-3 bg-rose-500/20 rounded-2xl text-rose-500"><ArrowDownCircle size={24} /></div>
                 <div>
-                  <p className="text-[10px] text-rose-500 uppercase font-black tracking-widest">Gastos del Mes</p>
-                  <p className="text-2xl font-black">{formatCurrency(egresos)}</p>
+                  <p className="text-[10px] text-rose-500/70 uppercase font-black tracking-widest">Total Gastos</p>
+                  <p className="text-3xl font-black">{formatCurrency(egresos)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -265,56 +265,62 @@ export default function TransaccionesPage() {
 
           {/* Lista de Transacciones */}
           <div className="space-y-3">
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-              <Search size={14} /> Historial de transacciones
+            <h2 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+              <Search size={14} /> Registro Histórico
             </h2>
 
             {loading ? (
               <div className="py-20 flex flex-col items-center gap-4">
-                <Loader2 className="animate-spin text-emerald-500 h-10 w-10" />
-                <p className="text-gray-500">Sincronizando movimientos...</p>
+                <Loader2 className="animate-spin text-emerald-500 h-8 w-8" />
+                <p className="text-sm text-gray-500 font-medium">Cargando movimientos...</p>
               </div>
             ) : transactions.length === 0 ? (
-              <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600">
-                No hay transacciones registradas en este periodo.
+              <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600 font-medium">
+                No hay movimientos en este mes.
               </div>
             ) : (
               transactions.map(t => {
                 const isIngreso = t.tipo?.trim() === "Ingreso"
                 return (
-                  <Card key={t.id} className="group bg-[#121212] border-white/5 hover:border-white/10 transition-all">
+                  <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200">
                     <CardContent className="p-4 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "p-3 rounded-2xl shrink-0",
-                          isIngreso ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                          isIngreso ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
                         )}>
-                          {isIngreso ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
+                          {isIngreso ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
                         </div>
                         <div className="space-y-1">
-                          <h3 className="font-bold text-gray-100">{t.descripcion || "Sin descripción"}</h3>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[9px] uppercase border-white/10 text-gray-500 font-bold px-1.5 py-0">
-                              <Tag size={10} className="mr-1" /> {t.categoria || "Otros"}
+                          <h3 className="font-bold text-gray-100 text-sm md:text-base line-clamp-1">{t.descripcion || "Transacción"}</h3>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="text-[9px] uppercase border-white/10 bg-white/5 text-gray-400 font-black px-2 py-0">
+                              <Tag size={10} className="mr-1" /> {t.categoria || "General"}
                             </Badge>
-                            <span className="text-[10px] text-gray-600 font-medium">
+                            <span className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter">
                               {format(new Date(t.created_at), "dd MMM, yyyy", { locale: es })}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3 md:gap-6 shrink-0">
                         <div className="text-right">
-                          <p className={cn("font-black text-lg", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                          <p className={cn("font-black text-base md:text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
                             {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
                           </p>
                         </div>
                         
-                        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                        {/* BOTONES SIEMPRE VISIBLES */}
+                        <div className="flex items-center gap-1 border-l border-white/10 pl-2 md:pl-4 ml-1 md:ml-2">
                           <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
-                          <Button onClick={() => handleEliminar(t.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:bg-rose-500/10">
-                            <Trash2 size={16}/>
+                          <Button 
+                            onClick={() => handleEliminar(t.id)} 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-9 w-9 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          >
+                            <Trash2 size={17}/>
                           </Button>
                         </div>
                       </div>
