@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { User } from "@supabase/supabase-js"
+import { toast } from "sonner"
 
 export default function RegistroPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -36,7 +37,6 @@ export default function RegistroPage() {
       }
       setUser(user)
       
-      // Pre-fill with Google data if available
       if (user.user_metadata) {
         setFormData(prev => ({
           ...prev,
@@ -48,192 +48,174 @@ export default function RegistroPage() {
     getUser()
   }, [supabase, router])
 
- const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
 
     setIsLoading(true)
     try {
-      // Usamos UPSERT en lugar de UPDATE para que cree el registro si no existe
-      const { error } = await supabase
+      // 1. Datos Personales en USER_PROFILES
+      const { error: errorPersonal } = await supabase
         .from("user_profiles")
         .upsert({
-          id: user.id, // Es obligatorio incluir el ID para el upsert
+          id: user.id,
           ...formData,
           registration_complete: true,
           updated_at: new Date().toISOString(),
         })
 
-      if (error) {
-        console.error("Error saving profile:", error.message)
-        alert("Error al guardar: " + error.message) // Para que veas el error en pantalla
-        return
-      }
+      if (errorPersonal) throw errorPersonal
 
-      // IMPORTANTE: Asegúrate de que esta sea la ruta de tu dashboard
+      // 2. Colores del Dashboard en PROFILES (Valores de tu tabla de tarjetas)
+      const { error: errorTema } = await supabase
+        .from("profiles")
+        .upsert({
+          id: user.id,
+          theme_name: "Esmeralda (Default)",
+          primary_color: "#10B981",
+          secondary_color: "#0D9488",
+          accent_color: "#F59E0B",
+          background_color: "#F3F4F6", // Fondo claro para el dashboard
+          text_color: "#1F2937",       // Texto oscuro para el dashboard
+          sidebar_color: "#1F2937",
+          card_color: "#FFFFFF",       // Tarjetas blancas para el dashboard
+          font_family: "Inter",
+          font_size: "16px",
+          background_opacity: 100,
+          updated_at: new Date().toISOString(),
+        })
+
+      if (errorTema) throw errorTema
+
+      toast.success("¡Perfil completado!")
       router.push("/dashboard") 
       
-    } catch (error) {
-      console.error("Unexpected error:", error)
+    } catch (error: any) {
+      toast.error("Error: " + error.message)
     } finally {
       setIsLoading(false)
     }
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  if (!user) return null
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <Card className="w-full max-w-2xl shadow-xl border-0">
-        <CardHeader className="text-center space-y-2">
-          <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
-            Completa tu perfil
-          </CardTitle>
-          <CardDescription className="text-gray-600 dark:text-gray-400">
-            Necesitamos algunos datos básicos para personalizar tu experiencia
+    // Fondo de la página en negro profundo
+    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] p-4">
+      {/* Card en modo oscuro (Gris muy oscuro / Negro) */}
+      <Card className="w-full max-w-2xl border-gray-800 bg-[#121212] text-white shadow-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-[#10B981]">Registro de Usuario</CardTitle>
+          <CardDescription className="text-gray-400">
+            Configura tus datos personales y tema visual
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nombres">Nombres *</Label>
-                <Input
-                  id="nombres"
-                  value={formData.nombres}
-                  onChange={(e) => setFormData(prev => ({ ...prev, nombres: e.target.value }))}
-                  placeholder="Ingresa tus nombres"
-                  required
+                <Label className="text-gray-300">Nombres *</Label>
+                <Input 
+                  required 
+                  value={formData.nombres} 
+                  onChange={e => setFormData({...formData, nombres: e.target.value})} 
+                  className="bg-[#1a1a1a] border-gray-700 text-white focus:border-[#10B981]"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="apellidos">Apellidos *</Label>
-                <Input
-                  id="apellidos"
-                  value={formData.apellidos}
-                  onChange={(e) => setFormData(prev => ({ ...prev, apellidos: e.target.value }))}
-                  placeholder="Ingresa tus apellidos"
-                  required
+                <Label className="text-gray-300">Apellidos *</Label>
+                <Input 
+                  required 
+                  value={formData.apellidos} 
+                  onChange={e => setFormData({...formData, apellidos: e.target.value})} 
+                  className="bg-[#1a1a1a] border-gray-700 text-white focus:border-[#10B981]"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cedula">Cédula / Documento *</Label>
-                <Input
-                  id="cedula"
-                  value={formData.cedula}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cedula: e.target.value }))}
-                  placeholder="Número de documento"
-                  required
+                <Label className="text-gray-300">Cédula *</Label>
+                <Input 
+                  required 
+                  value={formData.cedula} 
+                  onChange={e => setFormData({...formData, cedula: e.target.value})} 
+                  className="bg-[#1a1a1a] border-gray-700 text-white"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono *</Label>
-                <Input
-                  id="telefono"
-                  type="tel"
-                  value={formData.telefono}
-                  onChange={(e) => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
-                  placeholder="+57 300 123 4567"
-                  required
+                <Label className="text-gray-300">Teléfono *</Label>
+                <Input 
+                  required 
+                  value={formData.telefono} 
+                  onChange={e => setFormData({...formData, telefono: e.target.value})} 
+                  className="bg-[#1a1a1a] border-gray-700 text-white"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="fecha_nacimiento">Fecha de nacimiento</Label>
-                <Input
-                  id="fecha_nacimiento"
-                  type="date"
-                  value={formData.fecha_nacimiento}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
+                <Label className="text-gray-300">Fecha de Nacimiento</Label>
+                <Input 
+                  type="date" 
+                  value={formData.fecha_nacimiento} 
+                  onChange={e => setFormData({...formData, fecha_nacimiento: e.target.value})} 
+                  className="bg-[#1a1a1a] border-gray-700 text-white [color-scheme:dark]"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="genero">Género</Label>
-                <Select
-                  value={formData.genero}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, genero: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona tu género" />
+                <Label className="text-gray-300">Género</Label>
+                <Select onValueChange={v => setFormData({...formData, genero: v})}>
+                  <SelectTrigger className="bg-[#1a1a1a] border-gray-700 text-white">
+                    <SelectValue placeholder="Selecciona"/>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-[#121212] border-gray-700 text-white">
                     <SelectItem value="masculino">Masculino</SelectItem>
                     <SelectItem value="femenino">Femenino</SelectItem>
                     <SelectItem value="otro">Otro</SelectItem>
-                    <SelectItem value="prefiero_no_decir">Prefiero no decir</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="direccion">Dirección</Label>
-              <Input
-                id="direccion"
-                value={formData.direccion}
-                onChange={(e) => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
-                placeholder="Tu dirección de residencia"
+              <Label className="text-gray-300">Dirección</Label>
+              <Input 
+                value={formData.direccion} 
+                onChange={e => setFormData({...formData, direccion: e.target.value})} 
+                className="bg-[#1a1a1a] border-gray-700 text-white"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
-                <Input
-                  id="ciudad"
-                  value={formData.ciudad}
-                  onChange={(e) => setFormData(prev => ({ ...prev, ciudad: e.target.value }))}
-                  placeholder="Ciudad de residencia"
+                <Label className="text-gray-300">Ciudad</Label>
+                <Input 
+                  value={formData.ciudad} 
+                  onChange={e => setFormData({...formData, ciudad: e.target.value})} 
+                  className="bg-[#1a1a1a] border-gray-700 text-white"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pais">País</Label>
-                <Select
-                  value={formData.pais}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, pais: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona tu país" />
+                <Label className="text-gray-300">País</Label>
+                <Select defaultValue="Colombia" onValueChange={v => setFormData({...formData, pais: v})}>
+                  <SelectTrigger className="bg-[#1a1a1a] border-gray-700 text-white">
+                    <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-[#121212] border-gray-700 text-white">
                     <SelectItem value="Colombia">Colombia</SelectItem>
-                    <SelectItem value="Mexico">México</SelectItem>
-                    <SelectItem value="Argentina">Argentina</SelectItem>
-                    <SelectItem value="Chile">Chile</SelectItem>
-                    <SelectItem value="Peru">Perú</SelectItem>
-                    <SelectItem value="Ecuador">Ecuador</SelectItem>
-                    <SelectItem value="Venezuela">Venezuela</SelectItem>
-                    <SelectItem value="Espana">España</SelectItem>
-                    <SelectItem value="Otro">Otro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            <Button 
+              type="submit" 
+              disabled={isLoading} 
+              className="w-full bg-[#10B981] hover:bg-[#0D9488] text-white font-bold h-12 mt-4"
             >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Guardando...</span>
-                </div>
-              ) : (
-                "Completar registro"
-              )}
+              {isLoading ? "Sincronizando..." : "Finalizar Registro"}
             </Button>
           </form>
         </CardContent>
