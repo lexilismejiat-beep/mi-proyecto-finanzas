@@ -9,7 +9,15 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter 
+} from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Plus, Pencil, Trash2, Bell, Calendar, Clock, 
@@ -21,15 +29,64 @@ import { format, differenceInDays, parseISO, addMonths } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
 
-// --- COMPONENTE DE FORMULARIO MODAL ---
+// --- COMPONENTE MODAL DE ELIMINACIÓN ---
+function ModalEliminar({ id, titulo, onDeleted }: { id: number, titulo: string, onDeleted: () => void }) {
+  const supabase = createClient()
+  const [open, setOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleEliminar = async () => {
+    setDeleting(true)
+    const { error } = await supabase.from("recordatorios").delete().eq('id', id)
+    
+    if (error) {
+      toast.error("No se pudo eliminar: " + error.message)
+    } else {
+      toast.success("Recordatorio eliminado")
+      setOpen(false)
+      onDeleted()
+    }
+    setDeleting(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10">
+          <Trash2 size={18}/>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-[#121212] border-white/10 text-white sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold">¿Eliminar recordatorio?</DialogTitle>
+          <DialogDescription className="text-zinc-400">
+            Estás a punto de borrar <strong>{titulo}</strong>. Esta acción no se puede deshacer.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={() => setOpen(false)} className="text-white hover:bg-white/5">
+            Cancelar
+          </Button>
+          <Button onClick={handleEliminar} disabled={deleting} className="bg-rose-600 hover:bg-rose-700 text-white font-bold">
+            {deleting ? <Loader2 className="animate-spin" /> : "Sí, eliminar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// --- MODAL DE CREACIÓN/EDICIÓN ---
 function ModalRecordatorio({ 
   userCedula, 
+  userNombre,
   userPhone, 
   userTelegram, 
   onRefresh, 
   editData = null 
 }: { 
   userCedula: string, 
+  userNombre: string,
   userPhone: string,
   userTelegram: string,
   onRefresh: () => void, 
@@ -52,6 +109,7 @@ function ModalRecordatorio({
       frecuencia: formData.get("frecuencia"),
       categoria: formData.get("categoria"),
       user_id: userCedula,
+      user_nombre: userNombre,
       telefono_destino: userPhone,
       telegram_id: userTelegram,
       estado: editData?.estado || 'pendiente'
@@ -79,7 +137,7 @@ function ModalRecordatorio({
             <Pencil size={18}/>
           </Button>
         ) : (
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold shadow-lg shadow-emerald-900/20">
             <Plus size={18} /> Nuevo Recordatorio
           </Button>
         )}
@@ -130,8 +188,8 @@ function ModalRecordatorio({
               <Input name="categoria" defaultValue={editData?.categoria} placeholder="Servicios" className="bg-white/5 border-white/10 text-white" />
             </div>
           </div>
-          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={loading}>
-            {loading ? "Procesando..." : editData ? "Guardar Cambios" : "Confirmar Recordatorio"}
+          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" disabled={loading}>
+            {loading ? <Loader2 className="animate-spin" /> : editData ? "Guardar Cambios" : "Confirmar Recordatorio"}
           </Button>
         </form>
       </DialogContent>
@@ -169,30 +227,35 @@ export default function RecordatoriosPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  // Botones de prueba simplificados (La Edge Function ya sabe a quién enviar)
   const handleTestBot = async () => {
+    if (!profile?.cedula) return toast.error("Error de perfil");
     setIsTestingBot(true);
     try {
-      await fetch(`https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram&t=${Date.now()}`, { method: 'GET', mode: 'cors' });
-      toast.success("✅ Prueba de Telegram enviada");
+      await fetch(`https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=telegram&userId=${profile.cedula}&t=${Date.now()}`, { 
+        method: 'GET', 
+        mode: 'cors' 
+      });
+      toast.success("✅ Prueba enviada");
     } catch (error) { toast.error("Error en Telegram"); } finally { setIsTestingBot(false); }
   };
 
   const handleTestWhatsApp = async () => {
+    if (!profile?.cedula) return toast.error("Error de perfil");
     setIsTestingWhatsApp(true);
     try {
-      await fetch(`https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&t=${Date.now()}`, { method: 'GET', mode: 'cors' });
+      await fetch(`https://rdyaeslcznsynfgowutw.supabase.co/functions/v1/rapid-handler?type=whatsapp&userId=${profile.cedula}&t=${Date.now()}`, { 
+        method: 'GET', 
+        mode: 'cors' 
+      });
       toast.success("✅ WhatsApp enviado");
     } catch (error) { toast.error("Error en WhatsApp"); } finally { setIsTestingWhatsApp(false); }
   };
 
   const handleMarcarComoPagado = async (reminder: any) => {
     try {
-      // 1. Marcar actual como completado
       const { error: updateError } = await supabase.from("recordatorios").update({ estado: 'completado' }).eq('id', reminder.id)
       if (updateError) throw updateError
 
-      // 2. Si es mensual, crear el del próximo mes automáticamente
       if (reminder.frecuencia === "Mensual") {
         const fechaActual = parseISO(reminder.fecha_vencimiento)
         const proximaFecha = addMonths(fechaActual, 1)
@@ -205,25 +268,19 @@ export default function RecordatoriosPage() {
           frecuencia: "Mensual",
           categoria: reminder.categoria,
           user_id: reminder.user_id,
+          user_nombre: reminder.user_nombre,
           telefono_destino: reminder.telefono_destino,
           telegram_id: reminder.telegram_id,
           estado: 'pendiente'
         }
 
         await supabase.from("recordatorios").insert([nuevoRecordatorio])
-        toast.success("¡Pago registrado! Próximo mes programado.")
+        toast.success("¡Pago registrado!")
       } else {
         toast.success("¡Pago registrado!");
       }
       fetchData();
     } catch (error: any) { toast.error("Error: " + error.message) }
-  }
-
-  const handleEliminar = async (id: number) => {
-    if (!confirm("¿Eliminar este recordatorio?")) return
-    const { error } = await supabase.from("recordatorios").delete().eq('id', id)
-    if (error) toast.error("Error al borrar")
-    else { toast.success("Eliminado"); fetchData(); }
   }
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(amount)
@@ -246,29 +303,29 @@ export default function RecordatoriosPage() {
         <main className="p-4 sm:p-8 space-y-6 max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Recordatorios</h1>
+              <h1 className="text-4xl font-black tracking-tight">Recordatorios</h1>
               <p className="text-gray-400 text-sm">Alertas automáticas vía WhatsApp y Telegram.</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleTestWhatsApp} disabled={isTestingWhatsApp} className="border-green-500/30 text-green-500 hover:bg-green-500/10 gap-2">
+              <Button variant="outline" onClick={handleTestWhatsApp} disabled={isTestingWhatsApp} className="border-green-500/30 text-green-500 hover:bg-green-500/10 gap-2 font-bold">
                 {isTestingWhatsApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle size={18} />}
                 Prueba WA
               </Button>
-              <Button variant="outline" onClick={handleTestBot} disabled={isTestingBot} className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 gap-2">
+              <Button variant="outline" onClick={handleTestBot} disabled={isTestingBot} className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 gap-2 font-bold">
                 {isTestingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
                 Prueba TG
               </Button>
-              <ModalRecordatorio userCedula={profile?.cedula} userPhone={profile?.telefono} userTelegram={profile?.telegram_id} onRefresh={fetchData} />
+              <ModalRecordatorio userCedula={profile?.cedula} userNombre={profile?.nombres} userPhone={profile?.telefono} userTelegram={profile?.telegram_id} onRefresh={fetchData} />
             </div>
           </div>
 
-          <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent">
+          <Card className="border-white/10 bg-gradient-to-br from-orange-500/10 via-transparent to-transparent rounded-3xl overflow-hidden shadow-2xl">
             <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-orange-500/20 rounded-2xl"><AlertCircle className="text-orange-500 h-8 w-8" /></div>
                 <div>
                   <p className="text-xs text-orange-500/80 uppercase font-black">Total Pendiente</p>
-                  <p className="text-4xl font-black">{formatCurrency(total)}</p>
+                  <p className="text-4xl font-black tracking-tighter">{formatCurrency(total)}</p>
                 </div>
               </div>
             </CardContent>
@@ -282,7 +339,7 @@ export default function RecordatoriosPage() {
                     const status = getStatusInfo(r.fecha_vencimiento, r.estado)
                     const Icon = status.icon
                     return (
-                    <Card key={r.id} className="bg-[#121212] border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden">
+                    <Card key={r.id} className="bg-zinc-900/40 border border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden rounded-2xl">
                         <CardContent className="p-0 flex items-stretch">
                             <div className={cn("w-1.5", status.class.split(' ')[0])} />
                             <div className="p-4 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
@@ -298,13 +355,15 @@ export default function RecordatoriosPage() {
                                 </div>
                                 <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
                                     <div className="text-right">
-                                        <p className="font-black text-xl text-white">{formatCurrency(r.monto)}</p>
+                                        <p className="font-black text-xl text-white tracking-tighter">{formatCurrency(r.monto)}</p>
                                         <p className="text-[10px] text-orange-500">Aviso {r.recordar_dias_antes} días antes</p>
                                     </div>
                                     <div className="flex gap-1">
                                         <Button onClick={() => handleMarcarComoPagado(r)} variant="ghost" size="icon" className="h-9 w-9 text-emerald-500 hover:bg-emerald-500/10"><CheckCircle2 size={18}/></Button>
-                                        <ModalRecordatorio userCedula={profile?.cedula} userPhone={profile?.telefono} userTelegram={profile?.telegram_id} onRefresh={fetchData} editData={r} />
-                                        <Button onClick={() => handleEliminar(r.id)} variant="ghost" size="icon" className="h-9 w-9 text-rose-500 hover:bg-rose-500/10"><Trash2 size={18}/></Button>
+                                        <ModalRecordatorio userCedula={profile?.cedula} userNombre={profile?.nombres} userPhone={profile?.telefono} userTelegram={profile?.telegram_id} onRefresh={fetchData} editData={r} />
+                                        
+                                        {/* NUEVO BOTÓN CON MODAL DE ELIMINAR */}
+                                        <ModalEliminar id={r.id} titulo={r.titulo} onDeleted={fetchData} />
                                     </div>
                                 </div>
                             </div>
