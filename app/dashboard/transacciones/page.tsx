@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { TopBar } from "@/components/dashboard/top-bar"
 import { cn } from "@/lib/utils"
@@ -30,7 +30,7 @@ const MONTHS = [
   { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
 ]
 
-// --- COMPONENTE DE FORMULARIO MODAL ---
+// --- COMPONENTE DE FORMULARIO MODAL (EDICIÓN Y CREACIÓN) ---
 function ModalTransaccion({ 
   userId, 
   onRefresh, 
@@ -43,6 +43,15 @@ function ModalTransaccion({
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  
+  // Estado controlado para el Select y sincronización
+  const [tipo, setTipo] = useState(editData?.tipo?.trim() || "Egreso")
+
+  useEffect(() => {
+    if (open) {
+      setTipo(editData?.tipo?.trim() || "Egreso")
+    }
+  }, [editData, open])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -52,7 +61,7 @@ function ModalTransaccion({
     const payload = {
       descripcion: formData.get("descripcion"),
       monto: parseFloat(formData.get("monto") as string),
-      tipo: formData.get("tipo"),
+      tipo: tipo,
       categoria: formData.get("categoria"),
       user_id: userId,
       created_at: editData ? editData.created_at : new Date().toISOString()
@@ -95,18 +104,18 @@ function ModalTransaccion({
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Descripción</Label>
-            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Pago de Nómina" className="bg-white/5 border-white/10" required />
+            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Pago de Nómina" className="bg-white/5 border-white/10 text-white" required />
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Monto ($)</Label>
-              <Input name="monto" type="number" step="any" defaultValue={editData?.monto} placeholder="50000" className="bg-white/5 border-white/10" required />
+              <Input name="monto" type="number" step="any" defaultValue={editData?.monto} placeholder="50000" className="bg-white/5 border-white/10 text-white" required />
             </div>
             <div className="space-y-2">
               <Label>Tipo</Label>
-              <Select name="tipo" defaultValue={editData?.tipo?.trim() || "Egreso"}>
-                <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+              <Select value={tipo} onValueChange={setTipo}>
+                <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-[#121212] border-white/10 text-white">
                   <SelectItem value="Ingreso">Ingreso (+)</SelectItem>
                   <SelectItem value="Egreso">Egreso (-)</SelectItem>
@@ -117,10 +126,10 @@ function ModalTransaccion({
 
           <div className="space-y-2">
             <Label>Categoría</Label>
-            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Alimentación" className="bg-white/5 border-white/10" required />
+            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Alimentación" className="bg-white/5 border-white/10 text-white" required />
           </div>
 
-          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2" disabled={loading}>
+          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2 text-white font-bold" disabled={loading}>
             {loading ? "Procesando..." : editData ? "Guardar Cambios" : "Registrar Transacción"}
           </Button>
         </form>
@@ -129,7 +138,6 @@ function ModalTransaccion({
   )
 }
 
-// --- PÁGINA PRINCIPAL ---
 export default function TransaccionesPage() {
   const supabase = createClient()
   
@@ -159,12 +167,10 @@ export default function TransaccionesPage() {
       const rangeFrom = startOfMonth(baseDate)
       const rangeTo = endOfMonth(baseDate)
 
-      const userIdToFilter = profileData?.cedula || user.id
-
       const { data, error } = await supabase
         .from("transacciones")
         .select("*")
-        .eq("user_id", userIdToFilter)
+        .eq("user_id", profileData?.cedula || user.id)
         .gte("created_at", startOfDay(rangeFrom).toISOString())
         .lte("created_at", endOfDay(rangeTo).toISOString())
         .order("created_at", { ascending: false })
@@ -182,7 +188,7 @@ export default function TransaccionesPage() {
   useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear])
 
   const handleEliminar = async (id: number) => {
-    if (!confirm("¿Eliminar este registro?")) return
+    if (!confirm("¿Eliminar este registro permanentemente?")) return
     const { error } = await supabase.from("transacciones").delete().eq('id', id)
     if (error) toast.error("Error al borrar")
     else { toast.success("Eliminado correctamente"); fetchTransactions(); }
@@ -192,8 +198,12 @@ export default function TransaccionesPage() {
     return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(amount)
   }
 
-  const ingresos = transactions.filter(t => t.tipo?.trim() === "Ingreso").reduce((acc, t) => acc + (t.monto || 0), 0)
-  const egresos = transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (t.monto || 0), 0)
+  const { ingresos, egresos } = useMemo(() => {
+    return {
+      ingresos: transactions.filter(t => t.tipo?.trim() === "Ingreso").reduce((acc, t) => acc + (t.monto || 0), 0),
+      egresos: transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (t.monto || 0), 0)
+    }
+  }, [transactions])
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden">
@@ -207,7 +217,6 @@ export default function TransaccionesPage() {
         />
         
         <main className="p-4 sm:p-8 space-y-6 max-w-6xl mx-auto w-full">
-          {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-black tracking-tighter uppercase italic">Movimientos</h1>
@@ -222,26 +231,25 @@ export default function TransaccionesPage() {
                 <select 
                   value={selectedMonth} 
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5"
+                  className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5 text-white"
                 >
-                  {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-[#121212]">{m.label}</option>)}
+                  {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-zinc-900">{m.label}</option>)}
                 </select>
                 <div className="w-px bg-white/10 my-1"></div>
                 <select 
                   value={selectedYear} 
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5"
+                  className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5 text-white"
                 >
-                  {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-[#121212]">{y}</option>)}
+                  {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-zinc-900">{y}</option>)}
                 </select>
               </div>
               <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} />
             </div>
           </div>
 
-          {/* Resumen Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-emerald-500/5 border-emerald-500/10 overflow-hidden relative">
+            <Card className="bg-emerald-500/5 border-emerald-500/10 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowUpCircle size={80} /></div>
               <CardContent className="p-5 flex items-center gap-4 relative">
                 <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-500"><ArrowUpCircle size={24} /></div>
@@ -251,7 +259,7 @@ export default function TransaccionesPage() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-rose-500/5 border-rose-500/10 overflow-hidden relative">
+            <Card className="bg-rose-500/5 border-rose-500/10 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowDownCircle size={80} /></div>
               <CardContent className="p-5 flex items-center gap-4 relative">
                 <div className="p-3 bg-rose-500/20 rounded-2xl text-rose-500"><ArrowDownCircle size={24} /></div>
@@ -263,7 +271,6 @@ export default function TransaccionesPage() {
             </Card>
           </div>
 
-          {/* Lista de Transacciones */}
           <div className="space-y-3">
             <h2 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
               <Search size={14} /> Registro Histórico
@@ -272,20 +279,18 @@ export default function TransaccionesPage() {
             {loading ? (
               <div className="py-20 flex flex-col items-center gap-4">
                 <Loader2 className="animate-spin text-emerald-500 h-8 w-8" />
-                <p className="text-sm text-gray-500 font-medium">Cargando movimientos...</p>
+                <p className="text-sm text-gray-500">Cargando movimientos...</p>
               </div>
             ) : transactions.length === 0 ? (
               <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl text-gray-600 font-medium">
-                No hay movimientos en este mes.
+                No hay movimientos registrados para este periodo.
               </div>
             ) : (
               transactions.map(t => {
                 const isIngreso = t.tipo?.trim() === "Ingreso"
                 return (
-                  <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200 overflow-hidden">
+                  <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200">
                     <CardContent className="p-4 flex flex-col gap-3">
-                      
-                      {/* FILA 1: ICONO E INFO PRINCIPAL */}
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "p-3 rounded-2xl shrink-0",
@@ -299,14 +304,11 @@ export default function TransaccionesPage() {
                             <span className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter shrink-0">
                               {format(new Date(t.created_at), "dd MMM, yyyy", { locale: es })}
                             </span>
-                            {/* TAG DEBAJO DEL NOMBRE EN MÓVIL (Ubicación optimizada) */}
                             <Badge variant="outline" className="text-[9px] uppercase border-white/10 bg-white/5 text-gray-400 font-black px-2 py-0 truncate max-w-[120px]">
                               <Tag size={10} className="mr-1 shrink-0" /> {t.categoria || "General"}
                             </Badge>
                           </div>
                         </div>
-                        
-                        {/* MONTO EN ESCRITORIO (Hidden en móvil para usar la fila inferior) */}
                         <div className="hidden md:block text-right">
                            <p className={cn("font-black text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
                             {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
@@ -314,7 +316,6 @@ export default function TransaccionesPage() {
                         </div>
                       </div>
 
-                      {/* FILA 2 (Solo Móvil): MONTO Y ACCIONES CON MÁS ESPACIO */}
                       <div className="flex md:hidden items-center justify-between border-t border-white/5 pt-3">
                         <p className={cn("font-black text-base tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
                           {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
@@ -331,6 +332,19 @@ export default function TransaccionesPage() {
                             <Trash2 size={17}/>
                           </Button>
                         </div>
+                      </div>
+                      
+                      {/* Acciones en Escritorio */}
+                      <div className="hidden md:flex justify-end gap-2 border-t border-white/5 pt-2 mt-1">
+                        <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
+                        <Button 
+                          onClick={() => handleEliminar(t.id)} 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 text-rose-500/40 hover:text-rose-400"
+                        >
+                          <Trash2 size={16}/>
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
