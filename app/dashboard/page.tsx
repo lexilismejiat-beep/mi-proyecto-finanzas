@@ -6,6 +6,7 @@ import { TopBar } from "@/components/dashboard/top-bar"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { TransactionsTable } from "@/components/dashboard/transactions-table"
 import { CedulaSection } from "@/components/dashboard/cedula-section"
+import { SelectorMoneda } from "@/components/dashboard/selector-moneda"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
@@ -26,8 +27,9 @@ export default function DashboardPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [totals, setTotals] = useState({ income: 0, expenses: 0, balance: 0 })
-  
+  const [totals, setTotals] = useState({ income: 0, expenses: 0 })
+  const [balanceAcumulado, setBalanceAcumulado] = useState(0)
+
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -75,7 +77,7 @@ export default function DashboardPage() {
               .filter((t: any) => t.tipo === "Egreso")
               .reduce((acc: number, t: any) => acc + (Number(t.monto_cop) || 0), 0)
 
-            setTotals({ income, expenses, balance: income - expenses })
+            setTotals({ income, expenses })
           }
         }
       } catch (err) {
@@ -86,6 +88,20 @@ export default function DashboardPage() {
     }
     fetchData()
   }, [supabase, selectedMonth, selectedYear, cedula])
+
+  // Balance acumulado histórico: NO depende del mes/año seleccionado.
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!cedula) return
+      const { data, error } = await supabase.rpc("get_balance_total")
+      if (error) {
+        console.error("Error obteniendo el balance acumulado:", error)
+        return
+      }
+      setBalanceAcumulado(Number(data) || 0)
+    }
+    fetchBalance()
+  }, [supabase, cedula])
 
   // --- LÓGICA DE TEMAS Y FONDO ---
   const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
@@ -144,8 +160,8 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
-                <select 
+              <div className="flex flex-wrap items-center gap-2 bg-white/60 backdrop-blur-md p-2 rounded-xl border border-white shadow-lg">
+                <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                   className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
@@ -154,7 +170,7 @@ export default function DashboardPage() {
                     <option key={month.value} value={month.value}>{month.label}</option>
                   ))}
                 </select>
-                <select 
+                <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                   className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900"
@@ -163,6 +179,8 @@ export default function DashboardPage() {
                     <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
+                <div className="w-px self-stretch bg-slate-300" />
+                <SelectorMoneda className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-900" />
               </div>
             </div>
 
@@ -170,7 +188,7 @@ export default function DashboardPage() {
               <StatsCards
                 totalIncome={totals.income}
                 totalExpenses={totals.expenses}
-                currentBalance={totals.balance}
+                currentBalance={balanceAcumulado}
                 cardColor={theme?.card_color || "#FFFFFF"}
                 textColor={activeTextColor}
                 primaryColor={theme?.primary_color || "#10B981"}

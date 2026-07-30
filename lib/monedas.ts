@@ -36,6 +36,18 @@ export function convertir(montoCop: number, a: Moneda, tasas: Record<Moneda, num
 }
 
 /**
+ * Convierte un monto expresado en `desde` a COP. Inversa de convertir().
+ * Útil para persistir campos que se guardan en COP (ej. saldo_inicial)
+ * pero se editan en la moneda de visualización actual.
+ */
+export function convertirACop(monto: number, desde: Moneda, tasas: Record<Moneda, number>): number {
+  if (desde === "COP") return monto
+  const tasa = tasas[desde]
+  if (!tasa) return monto
+  return monto * tasa
+}
+
+/**
  * Texto pequeño para mostrar el monto original de una transacción cuando
  * se hizo en una moneda distinta a COP, ej. "100,00 USD".
  */
