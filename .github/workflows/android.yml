@@ -1,7 +1,9 @@
 name: Build Android APK
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "develop" ]
 
 jobs:
   build:
@@ -81,5 +83,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mis-Finanzas-App-v2
+          name: MisFinanzas-${{ github.ref_name }}-${{ github.sha }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
