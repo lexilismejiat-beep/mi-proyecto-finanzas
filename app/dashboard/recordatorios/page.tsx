@@ -28,6 +28,9 @@ import { createClient } from "@/lib/supabase/client"
 import { format, differenceInDays, parseISO, addMonths } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
+import { useProfile } from "@/contexts/profile-context"
+import { useTasas } from "@/lib/hooks/use-tasas"
+import { formatMoneda, convertir } from "@/lib/monedas"
 
 // --- COMPONENTE MODAL DE ELIMINACIÓN ---
 function ModalEliminar({ id, titulo, onDeleted }: { id: number, titulo: string, onDeleted: () => void }) {
@@ -200,6 +203,8 @@ function ModalRecordatorio({
 // --- PÁGINA PRINCIPAL ---
 export default function RecordatoriosPage() {
   const supabase = createClient()
+  const { monedaVisualizacion } = useProfile()
+  const { tasas } = useTasas()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [reminders, setReminders] = useState<any[]>([])
@@ -283,7 +288,7 @@ export default function RecordatoriosPage() {
     } catch (error: any) { toast.error("Error: " + error.message) }
   }
 
-  const formatCurrency = (amount: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(amount)
+  const formatCurrency = (montoCop: number) => formatMoneda(convertir(montoCop, monedaVisualizacion, tasas), monedaVisualizacion)
 
   const getStatusInfo = (dueDate: string, status: string) => {
     const days = differenceInDays(parseISO(dueDate), new Date())

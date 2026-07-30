@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatMoneda, convertir, type Moneda } from "@/lib/monedas"
 
 interface StatCardProps {
   title: string
@@ -86,6 +87,8 @@ interface StatsCardsProps {
   cardColor?: string
   textColor?: string
   primaryColor?: string
+  moneda?: Moneda
+  tasas?: Record<Moneda, number>
 }
 
 export function StatsCards({
@@ -95,15 +98,10 @@ export function StatsCards({
   cardColor,
   textColor,
   primaryColor,
+  moneda = "COP",
+  tasas = { COP: 1, USD: 0, EUR: 0 },
 }: StatsCardsProps) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  const formatCurrency = (amountCop: number) => formatMoneda(convertir(amountCop, moneda, tasas), moneda)
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
