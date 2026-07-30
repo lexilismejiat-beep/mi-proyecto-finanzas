@@ -15,15 +15,13 @@ import { toast } from "sonner"
 import { Loader2, Save, Target, Camera, MapPin, User as UserIcon, Coins, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useProfile } from "@/contexts/profile-context"
-import { useTasas } from "@/lib/hooks/use-tasas"
-import { convertir, convertirACop, type Moneda } from "@/lib/monedas"
+import { InputMoneda } from "@/components/dashboard/input-moneda"
 import { SelectorMoneda } from "@/components/dashboard/selector-moneda"
 
 export default function ConfiguracionPage() {
   const supabase = createClient()
   const { theme } = useThemeSettings()
-  const { recargar, monedaVisualizacion } = useProfile()
-  const { tasas, cargando: tasasCargando } = useTasas()
+  const { recargar } = useProfile()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // --- ANEXO: ESTADOS PARA EL MENÚ ---
@@ -34,15 +32,9 @@ export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [saldoInicialInput, setSaldoInicialInput] = useState("")
-  // Moneda en la que está expresado saldoInicialInput ahora mismo (el "adorno"
-  // del input). No siempre es igual a monedaVisualizacion: solo se sincronizan
-  // cuando el usuario cambia deliberadamente la moneda de visualización.
-  const [monedaSaldoInput, setMonedaSaldoInput] = useState<Moneda>("COP")
-  // null = todavía no hidratado. Una vez hidratado, guarda la última moneda
-  // de visualización vista, para distinguir "cambió la moneda" (reconvertir)
-  // de "solo terminaron de cargar las tasas" (no tocar lo que se ve).
-  const monedaVisualizacionAnterior = useRef<Moneda | null>(null)
+  // saldo_inicial vive en COP; InputMoneda se encarga de editarlo en la
+  // moneda de visualización y siempre reporta el equivalente en COP acá.
+  const [saldoInicialCop, setSaldoInicialCop] = useState(0)
 
   useEffect(() => {
     async function loadProfile() {
@@ -63,41 +55,12 @@ export default function ConfiguracionPage() {
           .single()
 
         setProfile({ ...data, ...mainProfile })
+        setSaldoInicialCop(Number(mainProfile?.saldo_inicial) || 0)
       }
       setLoading(false)
     }
     loadProfile()
   }, [supabase])
-
-  // saldo_inicial vive en COP; se edita en la moneda de visualización.
-  // - Primera vez que profile y tasas están listos: hidratar desde lo guardado.
-  // - Si después cambia monedaVisualizacion (cambio deliberado del usuario):
-  //   reconvertir lo que se ve, desde monedaSaldoInput (no desde lo guardado),
-  //   para no perder lo que se haya escrito.
-  // - Si solo cambian las tasas (carga async) sin que cambie monedaVisualizacion:
-  //   no tocar nada.
-  useEffect(() => {
-    if (loading || tasasCargando || !profile) return
-
-    if (monedaVisualizacionAnterior.current === null) {
-      const saldoCop = Number(profile.saldo_inicial) || 0
-      setSaldoInicialInput(String(convertir(saldoCop, monedaVisualizacion, tasas)))
-      setMonedaSaldoInput(monedaVisualizacion)
-      monedaVisualizacionAnterior.current = monedaVisualizacion
-      return
-    }
-
-    if (monedaVisualizacionAnterior.current === monedaVisualizacion) return
-
-    const monedaAnterior = monedaVisualizacionAnterior.current
-    setSaldoInicialInput((valorActual) => {
-      const numero = parseFloat(valorActual) || 0
-      const montoCop = convertirACop(numero, monedaAnterior, tasas)
-      return String(convertir(montoCop, monedaVisualizacion, tasas))
-    })
-    setMonedaSaldoInput(monedaVisualizacion)
-    monedaVisualizacionAnterior.current = monedaVisualizacion
-  }, [loading, tasasCargando, profile, monedaVisualizacion, tasas])
 
   const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -152,10 +115,8 @@ export default function ConfiguracionPage() {
       if (errorUser) throw errorUser;
 
       // 2. Guardamos la FOTO, el SUEÑO y el saldo inicial en 'profiles' (donde realmente viven)
-      // Convertir con monedaSaldoInput (la moneda del adorno del campo), no con
-      // monedaVisualizacion: si el usuario cambió de moneda justo antes de
-      // guardar, monedaVisualizacion ya no es la moneda en la que está el número.
-      const saldoInicialCop = convertirACop(parseFloat(saldoInicialInput) || 0, monedaSaldoInput, tasas)
+      // saldoInicialCop ya viene convertido a COP por InputMoneda (usa la
+      // moneda del adorno del campo, no la de visualización del momento).
       const { error: errorMain } = await supabase
         .from("profiles")
         .update({
@@ -347,18 +308,11 @@ export default function ConfiguracionPage() {
                 <CardContent className="space-y-3">
                   <div className="space-y-2">
                     <Label className="text-zinc-400">Saldo inicial</Label>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        step="any"
-                        className="bg-zinc-900 border-zinc-700 text-white pr-14"
-                        value={saldoInicialInput}
-                        onChange={(e) => setSaldoInicialInput(e.target.value)}
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-500">
-                        {monedaSaldoInput}
-                      </span>
-                    </div>
+                    <InputMoneda
+                      valorInicialCop={saldoInicialCop}
+                      onChangeCop={setSaldoInicialCop}
+                      inputClassName="w-full h-10 px-3 pr-14 rounded-md bg-zinc-900 border border-zinc-700 text-white"
+                    />
                   </div>
                   <p className="text-xs text-zinc-500">
                     Se suma al balance. Úsalo para reflejar el dinero que ya tenías cuando empezaste.

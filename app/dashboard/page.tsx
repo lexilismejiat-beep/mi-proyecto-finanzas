@@ -7,6 +7,7 @@ import { StatsCards } from "@/components/dashboard/stats-cards"
 import { TransactionsTable } from "@/components/dashboard/transactions-table"
 import { CedulaSection } from "@/components/dashboard/cedula-section"
 import { SelectorMoneda } from "@/components/dashboard/selector-moneda"
+import { MetaCard } from "@/components/dashboard/meta-card"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
@@ -194,6 +195,14 @@ export default function DashboardPage() {
                 primaryColor={theme?.primary_color || "#10B981"}
                 moneda={monedaVisualizacion}
                 tasas={tasas}
+              />
+            </div>
+
+            <div className="mb-8 w-full">
+              <MetaCard
+                ingresosMesCop={totals.income}
+                cardColor={theme?.card_color || "#FFFFFF"}
+                textColor={activeTextColor}
               />
             </div>
 
