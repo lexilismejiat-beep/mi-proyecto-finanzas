@@ -35,6 +35,10 @@ export default function ConfiguracionPage() {
   // saldo_inicial vive en COP; InputMoneda se encarga de editarlo en la
   // moneda de visualización y siempre reporta el equivalente en COP acá.
   const [saldoInicialCop, setSaldoInicialCop] = useState(0)
+  // Valor tal como está guardado en la base, para poder detectar si el
+  // usuario realmente lo modificó antes de escribir (evita drift de
+  // redondeo al guardar sin cambios reales).
+  const saldoInicialOriginalRef = useRef(0)
 
   useEffect(() => {
     async function loadProfile() {
@@ -55,7 +59,9 @@ export default function ConfiguracionPage() {
           .single()
 
         setProfile({ ...data, ...mainProfile })
-        setSaldoInicialCop(Number(mainProfile?.saldo_inicial) || 0)
+        const saldoCop = Number(mainProfile?.saldo_inicial) || 0
+        setSaldoInicialCop(saldoCop)
+        saldoInicialOriginalRef.current = saldoCop
       }
       setLoading(false)
     }
@@ -117,19 +123,26 @@ export default function ConfiguracionPage() {
       // 2. Guardamos la FOTO, el SUEÑO y el saldo inicial en 'profiles' (donde realmente viven)
       // saldoInicialCop ya viene convertido a COP por InputMoneda (usa la
       // moneda del adorno del campo, no la de visualización del momento).
+      // Si no cambió respecto a lo guardado, ni siquiera se incluye en el
+      // update: evita drift de redondeo por reescribir el mismo valor.
+      const payloadMain: Record<string, unknown> = {
+        avatar_url: profile.avatar_url,
+        dream: profile.dream,
+        full_name: `${profile.nombres} ${profile.apellidos}`,
+        updated_at: new Date().toISOString(),
+      }
+      if (saldoInicialCop !== saldoInicialOriginalRef.current) {
+        payloadMain.saldo_inicial = saldoInicialCop
+      }
+
       const { error: errorMain } = await supabase
         .from("profiles")
-        .update({
-          avatar_url: profile.avatar_url,
-          dream: profile.dream,
-          full_name: `${profile.nombres} ${profile.apellidos}`,
-          saldo_inicial: saldoInicialCop,
-          updated_at: new Date().toISOString(),
-        })
+        .update(payloadMain)
         .eq("id", user.id);
 
       if (errorMain) throw errorMain;
 
+      saldoInicialOriginalRef.current = saldoInicialCop
       await recargar();
       toast.success("¡Cambios guardados permanentemente!");
 
