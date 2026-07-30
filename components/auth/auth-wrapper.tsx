@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { User } from "@supabase/supabase-js"
 import { ThemeSettingsProvider, useThemeSettings } from "@/lib/theme-context"
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer"
+import { ProfileProvider } from "@/contexts/profile-context"
 
 interface UserProfile {
   id: string
@@ -127,11 +128,13 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
 
   // Si llegamos aquí, el usuario está autenticado y tiene perfil completo
   return (
-    <ThemeSettingsProvider>
-      <ThemedContent user={user} profile={profile}>
-        {children}
-      </ThemedContent>
-    </ThemeSettingsProvider>
+    <ProfileProvider>
+      <ThemeSettingsProvider>
+        <ThemedContent user={user} profile={profile}>
+          {children}
+        </ThemedContent>
+      </ThemeSettingsProvider>
+    </ProfileProvider>
   )
 }
 

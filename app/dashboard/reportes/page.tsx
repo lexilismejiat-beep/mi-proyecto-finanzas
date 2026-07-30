@@ -18,6 +18,9 @@ import domtoimage from "dom-to-image-more"
 
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 import { es } from "date-fns/locale"
+import { useProfile } from "@/contexts/profile-context"
+import { useTasas } from "@/lib/hooks/use-tasas"
+import { formatMoneda, formatMontoOriginal, convertir } from "@/lib/monedas"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -33,7 +36,9 @@ const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"
 export default function ReportesPage() {
   const supabase = createClient()
   const reportRef = useRef<HTMLDivElement>(null)
-  
+  const { cedula, monedaVisualizacion } = useProfile()
+  const { tasas } = useTasas()
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [transactions, setTransactions] = useState<any[]>([])
@@ -74,20 +79,21 @@ export default function ReportesPage() {
 
   useEffect(() => {
     async function fetchData() {
+      if (!cedula) return
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
         const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
-        
+
         const dateFrom = startOfMonth(new Date(selectedYear, selectedMonth))
         const dateTo = endOfMonth(new Date(selectedYear, selectedMonth))
 
         const { data: transData, error } = await supabase
           .from("transacciones")
           .select("*")
-          .eq("user_id", profileData?.cedula || user.id)
+          .eq("user_id", cedula)
           .gte("created_at", startOfDay(dateFrom).toISOString())
           .lte("created_at", endOfDay(dateTo).toISOString())
           .order("created_at", { ascending: false })
@@ -102,7 +108,7 @@ export default function ReportesPage() {
       }
     }
     fetchData()
-  }, [supabase, selectedMonth, selectedYear])
+  }, [supabase, selectedMonth, selectedYear, cedula])
 
   const { categoryData, monthlyData, stats } = useMemo(() => {
     const cats: Record<string, number> = {}
@@ -111,7 +117,7 @@ export default function ReportesPage() {
     let totalExpenses = 0
 
     transactions.forEach((t) => {
-      const monto = Math.abs(Number(t.monto)) || 0
+      const monto = Math.abs(Number(t.monto_cop)) || 0
       const tipo = t.tipo?.trim()
       const monthLabel = format(new Date(t.created_at), "MMM", { locale: es }).toUpperCase()
 
@@ -134,8 +140,7 @@ export default function ReportesPage() {
     }
   }, [transactions])
 
-  const formatCurrency = (v: number) => 
-    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v)
+  const formatCurrency = (montoCop: number) => formatMoneda(convertir(montoCop, monedaVisualizacion, tasas), monedaVisualizacion)
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
@@ -257,7 +262,10 @@ export default function ReportesPage() {
                               </span>
                             </td>
                             <td className={cn("p-4 text-right font-bold", t.tipo === "Ingreso" ? "text-emerald-400" : "text-rose-400")}>
-                              {t.tipo === "Ingreso" ? "+" : "-"}{formatCurrency(t.monto)}
+                              {t.tipo === "Ingreso" ? "+" : "-"}{formatCurrency(t.monto_cop)}
+                              {t.moneda && t.moneda !== "COP" && (
+                                <div className="text-[10px] font-normal text-gray-500">{formatMontoOriginal(t.monto, t.moneda)}</div>
+                              )}
                             </td>
                           </tr>
                         ))}

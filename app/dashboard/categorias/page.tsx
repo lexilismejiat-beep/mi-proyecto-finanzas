@@ -17,6 +17,9 @@ import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
 import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 import { toast } from "sonner"
+import { useProfile } from "@/contexts/profile-context"
+import { useTasas } from "@/lib/hooks/use-tasas"
+import { formatMoneda, convertir } from "@/lib/monedas"
 
 // Diccionario de iconos disponibles para elegir
 const ICON_OPTIONS = [
@@ -36,7 +39,9 @@ const ICON_OPTIONS = [
 export default function CategoriasPage() {
   const supabase = createClient()
   const { theme } = useThemeSettings()
-  
+  const { monedaVisualizacion } = useProfile()
+  const { tasas } = useTasas()
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
@@ -67,7 +72,7 @@ export default function CategoriasPage() {
       
       const { data: transData } = await supabase
         .from("transacciones")
-        .select("categoria, monto, created_at")
+        .select("categoria, monto_cop, created_at")
         .eq("user_id", profileData.cedula)
         .gte("created_at", startOfDay(dateFrom).toISOString())
         .lte("created_at", endOfDay(dateTo).toISOString())
@@ -95,16 +100,16 @@ export default function CategoriasPage() {
         for (const nombreGrupo in mapping) {
           const catDef = mapping[nombreGrupo]
           if (catDef.keywords?.some((k: string) => catLower.includes(k.toLowerCase()))) {
-            mapping[nombreGrupo].total += t.monto
-            mapping[nombreGrupo].desglose[t.categoria] = (mapping[nombreGrupo].desglose[t.categoria] || 0) + t.monto
+            mapping[nombreGrupo].total += t.monto_cop
+            mapping[nombreGrupo].desglose[t.categoria] = (mapping[nombreGrupo].desglose[t.categoria] || 0) + t.monto_cop
             asignado = true
             break
           }
         }
 
         if (!asignado) {
-          mapping["Otros"].total += t.monto
-          mapping["Otros"].desglose[t.categoria || "Sin etiqueta"] = (mapping["Otros"].desglose[t.categoria || "Sin etiqueta"] || 0) + t.monto
+          mapping["Otros"].total += t.monto_cop
+          mapping["Otros"].desglose[t.categoria || "Sin etiqueta"] = (mapping["Otros"].desglose[t.categoria || "Sin etiqueta"] || 0) + t.monto_cop
         }
       })
 
@@ -237,7 +242,7 @@ export default function CategoriasPage() {
                       <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{grupo.keywords?.join(", ")}</p>
                     </div>
                     <div className="text-right mr-4">
-                      <p className="text-2xl font-black text-emerald-500">${Math.abs(grupo.total).toLocaleString()}</p>
+                      <p className="text-2xl font-black text-emerald-500">{formatMoneda(convertir(Math.abs(grupo.total), monedaVisualizacion, tasas), monedaVisualizacion)}</p>
                     </div>
                     {grupo.id && (
                         <Button variant="ghost" size="icon" className="text-zinc-600 hover:text-rose-500" onClick={(e) => {e.stopPropagation(); deleteCategory(grupo.id)}}>
@@ -255,7 +260,7 @@ export default function CategoriasPage() {
                             Object.entries(grupo.desglose).map(([tag, monto]: any) => (
                                 <div key={tag} className="flex justify-between py-2.5 px-3 hover:bg-white/5 rounded-xl transition-colors">
                                   <span className="text-gray-300 text-sm capitalize">{tag}</span>
-                                  <span className="font-bold text-white text-sm">${Math.abs(monto).toLocaleString()}</span>
+                                  <span className="font-bold text-white text-sm">{formatMoneda(convertir(Math.abs(monto), monedaVisualizacion, tasas), monedaVisualizacion)}</span>
                                 </div>
                               ))
                         ) : (
