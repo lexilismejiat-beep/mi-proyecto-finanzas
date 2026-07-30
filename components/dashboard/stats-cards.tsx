@@ -16,8 +16,6 @@ interface StatCardProps {
   textColor?: string
   primaryColor?: string
   subtitle?: string
-  large?: boolean
-  valueClassName?: string
 }
 
 function StatCard({
@@ -30,8 +28,6 @@ function StatCard({
   cardColor,
   textColor,
   subtitle,
-  large,
-  valueClassName,
 }: StatCardProps) {
   return (
     <Card
@@ -56,8 +52,8 @@ function StatCard({
       </CardHeader>
       <CardContent>
         <div
-          className={cn(large ? "text-3xl md:text-4xl font-black" : "text-2xl font-bold", valueClassName)}
-          style={valueClassName ? undefined : { color: textColor }}
+          className="text-2xl font-bold"
+          style={{ color: textColor }}
         >
           {value}
         </div>
@@ -145,8 +141,6 @@ export function StatsCards({
         cardColor={cardColor}
         textColor={textColor}
         primaryColor={primaryColor}
-        large
-        valueClassName={currentBalance >= 0 ? "text-emerald-500" : "text-rose-500"}
       />
     </div>
   )
