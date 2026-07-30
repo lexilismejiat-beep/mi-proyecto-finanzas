@@ -201,6 +201,8 @@ export default function DashboardPage() {
             <div className="mb-8 w-full">
               <MetaCard
                 ingresosMesCop={totals.income}
+                mesSeleccionado={selectedMonth}
+                anioSeleccionado={selectedYear}
                 cardColor={theme?.card_color || "#FFFFFF"}
                 textColor={activeTextColor}
               />

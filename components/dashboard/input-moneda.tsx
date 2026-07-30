@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useProfile } from "@/contexts/profile-context"
 import { useTasas } from "@/lib/hooks/use-tasas"
-import { convertir, convertirACop, type Moneda } from "@/lib/monedas"
+import { convertir, convertirACop, MONEDAS, type Moneda } from "@/lib/monedas"
 import { cn } from "@/lib/utils"
+
+function redondear(numero: number, moneda: Moneda): string {
+  return numero.toFixed(MONEDAS[moneda].decimales)
+}
 
 interface InputMonedaProps {
   valorInicialCop: number
@@ -32,6 +36,12 @@ interface InputMonedaProps {
  *   no toca nada.
  * - Muestra el código de la moneda en la que está expresado el valor
  *   visible como adorno fijo dentro del input.
+ * - El valor mostrado siempre está redondeado a los decimales de la moneda
+ *   (2 para USD/EUR, 0 para COP): nunca se ve el float crudo sin redondear.
+ * - Si lo que el usuario escribe coincide con el original (valorInicialCop)
+ *   redondeado a la moneda actual, se reporta el COP original exacto en vez
+ *   de reconvertir — evita que "editar y guardar sin cambiar nada" corrompa
+ *   el valor por el redondeo del viaje de ida y vuelta entre monedas.
  */
 export function InputMoneda({
   valorInicialCop,
@@ -53,7 +63,7 @@ export function InputMoneda({
     if (tasasCargando) return
 
     if (monedaAnterior.current === null) {
-      setTexto(String(convertir(valorInicialCop, monedaVisualizacion, tasas)))
+      setTexto(redondear(convertir(valorInicialCop, monedaVisualizacion, tasas), monedaVisualizacion))
       setMonedaInput(monedaVisualizacion)
       monedaAnterior.current = monedaVisualizacion
       return
@@ -65,7 +75,7 @@ export function InputMoneda({
     setTexto((valorActual) => {
       const numero = parseFloat(valorActual) || 0
       const montoCop = convertirACop(numero, monedaPrevia, tasas)
-      return String(convertir(montoCop, monedaVisualizacion, tasas))
+      return redondear(convertir(montoCop, monedaVisualizacion, tasas), monedaVisualizacion)
     })
     setMonedaInput(monedaVisualizacion)
     monedaAnterior.current = monedaVisualizacion
@@ -76,6 +86,16 @@ export function InputMoneda({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nuevoTexto = e.target.value
     setTexto(nuevoTexto)
+
+    // Si lo que quedó escrito es exactamente lo que el original redondeado
+    // se ve en esta moneda, no hubo un cambio real: devolvemos el COP
+    // original exacto para no introducir drift de redondeo.
+    const textoSinCambios = redondear(convertir(valorInicialCop, monedaInput, tasas), monedaInput)
+    if (nuevoTexto === textoSinCambios) {
+      onChangeCop(valorInicialCop)
+      return
+    }
+
     const numero = parseFloat(nuevoTexto) || 0
     onChangeCop(convertirACop(numero, monedaInput, tasas))
   }
@@ -92,7 +112,7 @@ export function InputMoneda({
         disabled={disabled}
         className={inputClassName}
       />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold opacity-60">
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
         {monedaInput}
       </span>
     </div>
