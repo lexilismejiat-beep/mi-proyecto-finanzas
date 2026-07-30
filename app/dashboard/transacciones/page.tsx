@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { 
-  Plus, Pencil, Trash2, Calendar, 
+import {
+  Plus, Pencil, Trash2, Calendar,
   AlertCircle, Loader2, ArrowUpCircle, ArrowDownCircle,
   Filter, Tag, CreditCard, Search
 } from "lucide-react"
@@ -20,6 +20,9 @@ import { createClient } from "@/lib/supabase/client"
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
+import { useProfile } from "@/contexts/profile-context"
+import { useTasas } from "@/lib/hooks/use-tasas"
+import { MONEDAS, formatMoneda, formatMontoOriginal, convertir, type Moneda } from "@/lib/monedas"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -30,44 +33,79 @@ const MONTHS = [
   { value: 10, label: "Noviembre" }, { value: 11, label: "Diciembre" }
 ]
 
+interface Transaccion {
+  id: number
+  created_at: string
+  monto: number
+  moneda: Moneda
+  tasa_a_cop: number
+  monto_cop: number
+  tipo: string
+  categoria: string | null
+  descripcion: string | null
+  user_id: string
+}
+
+interface PerfilLigero {
+  nombres?: string
+  avatar_url?: string | null
+}
+
 // --- COMPONENTE DE FORMULARIO MODAL (EDICIÓN Y CREACIÓN) ---
-function ModalTransaccion({ 
-  userId, 
-  onRefresh, 
-  editData = null 
-}: { 
-  userId: string, 
-  onRefresh: () => void, 
-  editData?: any 
+function ModalTransaccion({
+  userId,
+  tasas,
+  onRefresh,
+  editData = null
+}: {
+  userId: string,
+  tasas: Record<Moneda, number>,
+  onRefresh: () => void,
+  editData?: Transaccion | null
 }) {
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  
+
   // Estado controlado para el Select y sincronización
   const [tipo, setTipo] = useState(editData?.tipo?.trim() || "Egreso")
+  const [moneda, setMoneda] = useState<Moneda>(editData?.moneda || "COP")
+  const [montoInput, setMontoInput] = useState(editData?.monto != null ? String(editData.monto) : "")
 
   useEffect(() => {
     if (open) {
       setTipo(editData?.tipo?.trim() || "Egreso")
+      setMoneda(editData?.moneda || "COP")
+      setMontoInput(editData?.monto != null ? String(editData.monto) : "")
     }
   }, [editData, open])
+
+  const montoNumerico = parseFloat(montoInput) || 0
+  const tasaSeleccionada = moneda === "COP" ? 1 : tasas[moneda] || 0
+  const equivalenteCop = montoNumerico * tasaSeleccionada
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     const formData = new FormData(e.currentTarget)
 
+    const monto = parseFloat(formData.get("monto") as string)
+    const tasaAplicada = moneda === "COP" ? 1 : tasas[moneda] || 0
+    const montoCop = monto * tasaAplicada
+
     const payload = {
       descripcion: formData.get("descripcion"),
-      monto: parseFloat(formData.get("monto") as string),
+      monto,
+      moneda,
+      tasa_a_cop: tasaAplicada,
+      monto_cop: montoCop,
       tipo: tipo,
       categoria: formData.get("categoria"),
       user_id: userId,
       created_at: editData ? editData.created_at : new Date().toISOString()
     }
 
-    const { error } = editData 
+    const { error } = editData
       ? await supabase.from("transacciones").update(payload).eq('id', editData.id)
       : await supabase.from("transacciones").insert([payload])
 
@@ -97,21 +135,50 @@ function ModalTransaccion({
       <DialogContent className="bg-[#121212] border-white/10 text-white sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-            <CreditCard className={editData ? "text-blue-500" : "text-emerald-500"} /> 
+            <CreditCard className={editData ? "text-blue-500" : "text-emerald-500"} />
             {editData ? "Editar Transacción" : "Nuevo Registro"}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Descripción</Label>
-            <Input name="descripcion" defaultValue={editData?.descripcion} placeholder="Ej: Pago de Nómina" className="bg-white/5 border-white/10 text-white" required />
+            <Input name="descripcion" defaultValue={editData?.descripcion ?? undefined} placeholder="Ej: Pago de Nómina" className="bg-white/5 border-white/10 text-white" required />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Monto ($)</Label>
-              <Input name="monto" type="number" step="any" defaultValue={editData?.monto} placeholder="50000" className="bg-white/5 border-white/10 text-white" required />
+              <Label>Monto</Label>
+              <Input
+                name="monto"
+                type="number"
+                step="any"
+                value={montoInput}
+                onChange={(e) => setMontoInput(e.target.value)}
+                placeholder="50000"
+                className="bg-white/5 border-white/10 text-white"
+                required
+              />
             </div>
+            <div className="space-y-2">
+              <Label>Moneda</Label>
+              <Select value={moneda} onValueChange={(v) => setMoneda(v as Moneda)}>
+                <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-[#121212] border-white/10 text-white">
+                  {(Object.keys(MONEDAS) as Moneda[]).map((m) => (
+                    <SelectItem key={m} value={m}>{m} · {MONEDAS[m].simbolo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {moneda !== "COP" && montoNumerico > 0 && (
+            <p className="text-xs text-emerald-400 -mt-2">
+              {tasaSeleccionada > 0 ? `≈ ${formatMoneda(equivalenteCop, "COP")}` : "Tasa de cambio no disponible por ahora"}
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select value={tipo} onValueChange={setTipo}>
@@ -122,11 +189,10 @@ function ModalTransaccion({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Categoría</Label>
-            <Input name="categoria" defaultValue={editData?.categoria} placeholder="Ej: Alimentación" className="bg-white/5 border-white/10 text-white" required />
+            <div className="space-y-2">
+              <Label>Categoría</Label>
+              <Input name="categoria" defaultValue={editData?.categoria ?? undefined} placeholder="Ej: Alimentación" className="bg-white/5 border-white/10 text-white" required />
+            </div>
           </div>
 
           <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2 text-white font-bold" disabled={loading}>
@@ -140,27 +206,28 @@ function ModalTransaccion({
 
 export default function TransaccionesPage() {
   const supabase = createClient()
-  
+  const { cedula, monedaVisualizacion } = useProfile()
+  const { tasas } = useTasas()
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [transactions, setTransactions] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<Transaccion[]>([])
   const [loading, setLoading] = useState(true)
-  const [profile, setProfile] = useState<any>(null)
-  
+  const [profile, setProfile] = useState<PerfilLigero | null>(null)
+
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   const fetchTransactions = async () => {
+    if (!cedula) return
     try {
       setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
 
-      const { data: profileData } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
-      const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      
-      if (profileData) {
-        setProfile({ ...profileData, avatar_url: mainProfile?.avatar_url || profileData.avatar_url })
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profileData } = await supabase.from("user_profiles").select("nombres").eq("id", user.id).maybeSingle()
+        const { data: mainProfile } = await supabase.from("profiles").select("avatar_url").eq("id", user.id).maybeSingle()
+        setProfile({ nombres: profileData?.nombres, avatar_url: mainProfile?.avatar_url })
       }
 
       const baseDate = new Date(selectedYear, selectedMonth, 1)
@@ -170,10 +237,11 @@ export default function TransaccionesPage() {
       const { data, error } = await supabase
         .from("transacciones")
         .select("*")
-        .eq("user_id", profileData?.cedula || user.id)
+        .eq("user_id", cedula)
         .gte("created_at", startOfDay(rangeFrom).toISOString())
         .lte("created_at", endOfDay(rangeTo).toISOString())
         .order("created_at", { ascending: false })
+        .returns<Transaccion[]>()
 
       if (error) throw error
       setTransactions(data || [])
@@ -185,7 +253,7 @@ export default function TransaccionesPage() {
     }
   }
 
-  useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear])
+  useEffect(() => { fetchTransactions() }, [selectedMonth, selectedYear, cedula])
 
   const handleEliminar = async (id: number) => {
     if (!confirm("¿Eliminar este registro permanentemente?")) return
@@ -194,14 +262,10 @@ export default function TransaccionesPage() {
     else { toast.success("Eliminado correctamente"); fetchTransactions(); }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(amount)
-  }
-
   const { ingresos, egresos } = useMemo(() => {
     return {
-      ingresos: transactions.filter(t => t.tipo?.trim() === "Ingreso").reduce((acc, t) => acc + (t.monto || 0), 0),
-      egresos: transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (t.monto || 0), 0)
+      ingresos: transactions.filter(t => t.tipo?.trim() === "Ingreso").reduce((acc, t) => acc + (Number(t.monto_cop) || 0), 0),
+      egresos: transactions.filter(t => t.tipo?.trim() === "Egreso").reduce((acc, t) => acc + (Number(t.monto_cop) || 0), 0)
     }
   }, [transactions])
 
@@ -210,12 +274,12 @@ export default function TransaccionesPage() {
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileOpenChange={setMobileSidebarOpen} />
 
       <div className={cn("transition-all duration-300", "lg:ml-64", sidebarCollapsed && "lg:ml-16")}>
-        <TopBar 
-          userName={profile ? `${profile.nombres}` : "Usuario"} 
+        <TopBar
+          userName={profile?.nombres ? `${profile.nombres}` : "Usuario"}
           avatarUrl={profile?.avatar_url}
-          onMenuClick={() => setMobileSidebarOpen(true)} 
+          onMenuClick={() => setMobileSidebarOpen(true)}
         />
-        
+
         <main className="p-4 sm:p-8 space-y-6 max-w-6xl mx-auto w-full">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -228,23 +292,23 @@ export default function TransaccionesPage() {
 
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="flex bg-[#121212] border border-white/10 rounded-xl p-1 flex-1 md:flex-none justify-center">
-                <select 
-                  value={selectedMonth} 
+                <select
+                  value={selectedMonth}
                   onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                   className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5 text-white"
                 >
                   {MONTHS.map(m => <option key={m.value} value={m.value} className="bg-zinc-900">{m.label}</option>)}
                 </select>
                 <div className="w-px bg-white/10 my-1"></div>
-                <select 
-                  value={selectedYear} 
+                <select
+                  value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                   className="bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer px-3 py-1.5 text-white"
                 >
                   {[2024, 2025, 2026].map(y => <option key={y} value={y} className="bg-zinc-900">{y}</option>)}
                 </select>
               </div>
-              <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} />
+              <ModalTransaccion userId={cedula || ""} tasas={tasas} onRefresh={fetchTransactions} />
             </div>
           </div>
 
@@ -255,7 +319,7 @@ export default function TransaccionesPage() {
                 <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-500"><ArrowUpCircle size={24} /></div>
                 <div>
                   <p className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest">Total Ingresos</p>
-                  <p className="text-2xl md:text-3xl font-black">{formatCurrency(ingresos)}</p>
+                  <p className="text-2xl md:text-3xl font-black">{formatMoneda(convertir(ingresos, monedaVisualizacion, tasas), monedaVisualizacion)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -265,7 +329,7 @@ export default function TransaccionesPage() {
                 <div className="p-3 bg-rose-500/20 rounded-2xl text-rose-500"><ArrowDownCircle size={24} /></div>
                 <div>
                   <p className="text-[10px] text-rose-500/70 uppercase font-black tracking-widest">Total Gastos</p>
-                  <p className="text-2xl md:text-3xl font-black">{formatCurrency(egresos)}</p>
+                  <p className="text-2xl md:text-3xl font-black">{formatMoneda(convertir(egresos, monedaVisualizacion, tasas), monedaVisualizacion)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -288,6 +352,8 @@ export default function TransaccionesPage() {
             ) : (
               transactions.map(t => {
                 const isIngreso = t.tipo?.trim() === "Ingreso"
+                const montoMostrado = convertir(Number(t.monto_cop) || 0, monedaVisualizacion, tasas)
+                const esOtraMoneda = t.moneda && t.moneda !== "COP"
                 return (
                   <Card key={t.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200">
                     <CardContent className="p-4 flex flex-col gap-3">
@@ -311,36 +377,44 @@ export default function TransaccionesPage() {
                         </div>
                         <div className="hidden md:block text-right">
                            <p className={cn("font-black text-xl tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
-                            {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
+                            {isIngreso ? "+" : "-"}{formatMoneda(montoMostrado, monedaVisualizacion)}
                           </p>
+                          {esOtraMoneda && (
+                            <p className="text-[10px] text-gray-500 font-medium">{formatMontoOriginal(t.monto, t.moneda)}</p>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex md:hidden items-center justify-between border-t border-white/5 pt-3">
-                        <p className={cn("font-black text-base tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
-                          {isIngreso ? "+" : "-"}{formatCurrency(t.monto)}
-                        </p>
+                        <div>
+                          <p className={cn("font-black text-base tracking-tighter", isIngreso ? "text-emerald-400" : "text-rose-400")}>
+                            {isIngreso ? "+" : "-"}{formatMoneda(montoMostrado, monedaVisualizacion)}
+                          </p>
+                          {esOtraMoneda && (
+                            <p className="text-[10px] text-gray-500 font-medium">{formatMontoOriginal(t.monto, t.moneda)}</p>
+                          )}
+                        </div>
 
                         <div className="flex items-center gap-1 border-l border-white/10 pl-2">
-                          <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
-                          <Button 
-                            onClick={() => handleEliminar(t.id)} 
-                            variant="ghost" 
-                            size="icon" 
+                          <ModalTransaccion userId={cedula || ""} tasas={tasas} onRefresh={fetchTransactions} editData={t} />
+                          <Button
+                            onClick={() => handleEliminar(t.id)}
+                            variant="ghost"
+                            size="icon"
                             className="h-9 w-9 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                           >
                             <Trash2 size={17}/>
                           </Button>
                         </div>
                       </div>
-                      
+
                       {/* Acciones en Escritorio */}
                       <div className="hidden md:flex justify-end gap-2 border-t border-white/5 pt-2 mt-1">
-                        <ModalTransaccion userId={profile?.cedula} onRefresh={fetchTransactions} editData={t} />
-                        <Button 
-                          onClick={() => handleEliminar(t.id)} 
-                          variant="ghost" 
-                          size="icon" 
+                        <ModalTransaccion userId={cedula || ""} tasas={tasas} onRefresh={fetchTransactions} editData={t} />
+                        <Button
+                          onClick={() => handleEliminar(t.id)}
+                          variant="ghost"
+                          size="icon"
                           className="h-9 w-9 text-rose-500/40 hover:text-rose-400"
                         >
                           <Trash2 size={16}/>

@@ -7,15 +7,18 @@ import { toast } from "sonner"
 
 interface CedulaSectionProps {
   profile: any;
+  cedula?: string | null;
 }
 
-export function CedulaSection({ profile }: CedulaSectionProps) {
-  // 1. Modificamos la función para que copie la Cédula en lugar del ID largo
+export function CedulaSection({ profile, cedula }: CedulaSectionProps) {
+  // La cédula viene siempre de user_profiles.cedula (ver bug B2 en AUDITORIA.md);
+  // profile.cedula (tabla profiles) no es confiable y se mantiene solo como respaldo visual.
+  const cedulaMostrada = cedula || profile?.cedula || profile?.id;
+
   const copyToClipboard = () => {
-    const identifier = profile?.cedula || profile?.id;
-    if (identifier) {
-      navigator.clipboard.writeText(identifier)
-      toast.success(profile?.cedula ? "Cédula copiada" : "ID copiado")
+    if (cedulaMostrada) {
+      navigator.clipboard.writeText(cedulaMostrada)
+      toast.success(cedula || profile?.cedula ? "Cédula copiada" : "ID copiado")
     }
   }
 
@@ -63,9 +66,8 @@ export function CedulaSection({ profile }: CedulaSectionProps) {
               Cédula / ID Fiscal
             </span>
             <div className="flex items-center justify-between">
-              {/* 3. Mostramos profile.cedula en lugar de profile.id */}
               <code className="text-[10px] text-slate-600 font-mono truncate max-w-[180px]">
-                {profile?.cedula || profile?.id || "Cargando..."}
+                {cedulaMostrada || "Cargando..."}
               </code>
               <Button 
                 variant="ghost" 

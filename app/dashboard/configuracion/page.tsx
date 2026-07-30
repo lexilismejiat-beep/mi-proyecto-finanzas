@@ -12,22 +12,30 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Save, Target, Camera, MapPin, User as UserIcon } from "lucide-react"
+import { Loader2, Save, Target, Camera, MapPin, User as UserIcon, Coins, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useProfile } from "@/contexts/profile-context"
+import { useTasas } from "@/lib/hooks/use-tasas"
+import { convertir, convertirACop } from "@/lib/monedas"
+import { SelectorMoneda } from "@/components/dashboard/selector-moneda"
 
 export default function ConfiguracionPage() {
   const supabase = createClient()
   const { theme } = useThemeSettings()
+  const { recargar, monedaVisualizacion } = useProfile()
+  const { tasas, cargando: tasasCargando } = useTasas()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
+
   // --- ANEXO: ESTADOS PARA EL MENÚ ---
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  
+
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [saldoInicialInput, setSaldoInicialInput] = useState("")
+  const saldoInicialHidratado = useRef(false)
 
   useEffect(() => {
     async function loadProfile() {
@@ -39,11 +47,11 @@ export default function ConfiguracionPage() {
           .select("*")
           .eq("id", user.id)
           .single()
-        
+
         // También verificamos si existe dream o avatar_url en la tabla profiles principal
         const { data: mainProfile } = await supabase
           .from("profiles")
-          .select("avatar_url, dream")
+          .select("avatar_url, dream, saldo_inicial")
           .eq("id", user.id)
           .single()
 
@@ -53,6 +61,16 @@ export default function ConfiguracionPage() {
     }
     loadProfile()
   }, [supabase])
+
+  // saldo_inicial vive en COP; se edita en la moneda de visualización actual.
+  // Se hidrata una sola vez (cuando profile y tasas ya cargaron) para no
+  // pisar lo que el usuario esté escribiendo si las tasas cambian después.
+  useEffect(() => {
+    if (saldoInicialHidratado.current || loading || tasasCargando || !profile) return
+    const saldoCop = Number(profile.saldo_inicial) || 0
+    setSaldoInicialInput(String(convertir(saldoCop, monedaVisualizacion, tasas)))
+    saldoInicialHidratado.current = true
+  }, [loading, tasasCargando, profile, monedaVisualizacion, tasas])
 
   const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -106,21 +124,24 @@ export default function ConfiguracionPage() {
 
       if (errorUser) throw errorUser;
 
-      // 2. Guardamos la FOTO y el SUEÑO en la tabla 'profiles' (donde realmente viven)
+      // 2. Guardamos la FOTO, el SUEÑO y el saldo inicial en 'profiles' (donde realmente viven)
+      const saldoInicialCop = convertirACop(parseFloat(saldoInicialInput) || 0, monedaVisualizacion, tasas)
       const { error: errorMain } = await supabase
         .from("profiles")
         .update({
           avatar_url: profile.avatar_url,
           dream: profile.dream,
           full_name: `${profile.nombres} ${profile.apellidos}`,
+          saldo_inicial: saldoInicialCop,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
 
       if (errorMain) throw errorMain;
 
+      await recargar();
       toast.success("¡Cambios guardados permanentemente!");
-      
+
       // Opcional: Pequeña pausa antes de recargar para que el usuario vea el éxito
       setTimeout(() => {
         window.location.reload();
@@ -272,8 +293,49 @@ export default function ConfiguracionPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              <Card className="bg-[#121212] border-zinc-800 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <Coins className="h-5 w-5 text-emerald-500" /> Moneda de Visualización
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <SelectorMoneda className="w-full h-10 px-3 rounded-md bg-zinc-900 border border-zinc-700 text-white" />
+                  <p className="text-xs text-zinc-500">
+                    Tus movimientos se guardan siempre en COP. Esto solo cambia cómo se muestran los totales.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-[#121212] border-zinc-800 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <PiggyBank className="h-5 w-5 text-emerald-500" /> Saldo Inicial
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-zinc-400">Saldo inicial ({monedaVisualizacion})</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      className="bg-zinc-900 border-zinc-700 text-white"
+                      value={saldoInicialInput}
+                      onChange={(e) => setSaldoInicialInput(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Se suma al balance. Úsalo para reflejar el dinero que ya tenías cuando empezaste.
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           </div>
+
+          <p className="text-center text-[11px] text-zinc-600 pt-4">
+            Tasas de cambio: <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer" className="underline hover:text-zinc-400">Rates By Exchange Rate API</a>
+          </p>
         </main>
       </div>
     </div>

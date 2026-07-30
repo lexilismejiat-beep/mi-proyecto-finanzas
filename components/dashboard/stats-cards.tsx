@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatMoneda, convertir, type Moneda } from "@/lib/monedas"
 
 interface StatCardProps {
   title: string
@@ -14,6 +15,9 @@ interface StatCardProps {
   cardColor?: string
   textColor?: string
   primaryColor?: string
+  subtitle?: string
+  large?: boolean
+  valueClassName?: string
 }
 
 function StatCard({
@@ -25,14 +29,17 @@ function StatCard({
   iconColor,
   cardColor,
   textColor,
+  subtitle,
+  large,
+  valueClassName,
 }: StatCardProps) {
   return (
-    <Card 
+    <Card
       className="border-border"
       style={{ backgroundColor: cardColor }}
     >
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle 
+        <CardTitle
           className="text-sm font-medium opacity-70"
           style={{ color: textColor }}
         >
@@ -48,12 +55,17 @@ function StatCard({
         </div>
       </CardHeader>
       <CardContent>
-        <div 
-          className="text-2xl font-bold"
-          style={{ color: textColor }}
+        <div
+          className={cn(large ? "text-3xl md:text-4xl font-black" : "text-2xl font-bold", valueClassName)}
+          style={valueClassName ? undefined : { color: textColor }}
         >
           {value}
         </div>
+        {subtitle && (
+          <p className="mt-1 text-xs opacity-60" style={{ color: textColor }}>
+            {subtitle}
+          </p>
+        )}
         {change && (
           <div className="mt-1 flex items-center gap-1 text-xs">
             {changeType === "positive" ? (
@@ -86,6 +98,8 @@ interface StatsCardsProps {
   cardColor?: string
   textColor?: string
   primaryColor?: string
+  moneda?: Moneda
+  tasas?: Record<Moneda, number>
 }
 
 export function StatsCards({
@@ -95,15 +109,10 @@ export function StatsCards({
   cardColor,
   textColor,
   primaryColor,
+  moneda = "COP",
+  tasas = { COP: 1, USD: 0, EUR: 0 },
 }: StatsCardsProps) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  const formatCurrency = (amountCop: number) => formatMoneda(convertir(amountCop, moneda, tasas), moneda)
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -128,15 +137,16 @@ export function StatsCards({
         textColor={textColor}
       />
       <StatCard
-        title="Balance Actual"
+        title="Balance Acumulado"
         value={formatCurrency(currentBalance)}
-        change="+8.3%"
-        changeType="positive"
+        subtitle="Histórico completo — no se reinicia cada mes"
         icon={Wallet}
         iconColor="bg-blue-500/10 text-blue-500"
         cardColor={cardColor}
         textColor={textColor}
         primaryColor={primaryColor}
+        large
+        valueClassName={currentBalance >= 0 ? "text-emerald-500" : "text-rose-500"}
       />
     </div>
   )
