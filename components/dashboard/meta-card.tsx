@@ -44,6 +44,14 @@ export function MetaCard({ ingresosMesCop, mesSeleccionado, anioSeleccionado, ca
 
   const guardarMeta = async () => {
     if (!user) return
+
+    // Sin cambios reales (incluye "abrí y guardé sin tocar nada"): no
+    // escribir en la base para no introducir drift de redondeo entre monedas.
+    if (metaPendienteCop === metaMensualCop) {
+      setEditando(false)
+      return
+    }
+
     setGuardando(true)
     try {
       const supabase = createClient()
@@ -54,13 +62,13 @@ export function MetaCard({ ingresosMesCop, mesSeleccionado, anioSeleccionado, ca
 
       if (error) throw error
       await recargar()
-      setEditando(false)
       toast.success("Meta actualizada")
     } catch (error) {
       console.error("Error guardando la meta mensual:", error)
       toast.error("No se pudo guardar la meta")
     } finally {
       setGuardando(false)
+      setEditando(false)
     }
   }
 
