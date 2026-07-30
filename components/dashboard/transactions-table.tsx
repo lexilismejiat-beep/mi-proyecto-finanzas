@@ -18,15 +18,20 @@ import { Label } from "@/components/ui/label"
 import { Edit2, Save, X, Loader2 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { toast } from "sonner"
+import { formatMoneda, formatMontoOriginal, convertir, type Moneda } from "@/lib/monedas"
 
-export function TransactionsTable({ 
-  cardColor, 
-  textColor, 
-  userCedula 
-}: { 
-  cardColor?: string, 
+export function TransactionsTable({
+  cardColor,
+  textColor,
+  userCedula,
+  moneda = "COP",
+  tasas = { COP: 1, USD: 0, EUR: 0 },
+}: {
+  cardColor?: string,
   textColor?: string,
-  userCedula?: string 
+  userCedula?: string,
+  moneda?: Moneda,
+  tasas?: Record<Moneda, number>,
 }) {
   const [transactions, setTransactions] = useState<any[]>([])
   const [editingTransaction, setEditingTransaction] = useState<any>(null)
@@ -41,7 +46,7 @@ export function TransactionsTable({
       .eq("user_id", userCedula)
       .order("created_at", { ascending: false })
       .limit(8)
-    
+
     if (!error && data) setTransactions(data)
   }
 
@@ -53,10 +58,13 @@ export function TransactionsTable({
     e.preventDefault()
     setIsSaving(true)
     try {
+      const montoEditado = Number(editingTransaction.monto) || 0
+      const tasaActual = Number(editingTransaction.tasa_a_cop) || 1
       const { error } = await supabase
         .from("transacciones")
         .update({
-          monto: editingTransaction.monto,
+          monto: montoEditado,
+          monto_cop: montoEditado * tasaActual,
           categoria: editingTransaction.categoria,
           descripcion: editingTransaction.descripcion,
           tipo: editingTransaction.tipo
@@ -87,14 +95,6 @@ export function TransactionsTable({
     return styles[cat] || "bg-gray-100 text-gray-700 border-gray-200"
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
-
   return (
     <>
       <Card style={{ backgroundColor: cardColor, color: textColor }}>
@@ -120,7 +120,10 @@ export function TransactionsTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                transactions.map((t) => (
+                transactions.map((t) => {
+                  const montoMostrado = convertir(Number(t.monto_cop) || 0, moneda, tasas)
+                  const esOtraMoneda = t.moneda && t.moneda !== "COP"
+                  return (
                   <TableRow key={t.id}>
                     <TableCell className="text-xs">
                       {new Date(t.created_at).toLocaleDateString('es-CO')}
@@ -129,7 +132,10 @@ export function TransactionsTable({
                       "font-bold",
                       t.tipo?.trim() === "Ingreso" ? "text-emerald-500" : "text-red-500"
                     )}>
-                      {t.tipo?.trim() === "Ingreso" ? "+" : "-"} {formatCurrency(t.monto)}
+                      {t.tipo?.trim() === "Ingreso" ? "+" : "-"} {formatMoneda(montoMostrado, moneda)}
+                      {esOtraMoneda && (
+                        <div className="text-[10px] font-normal opacity-60">{formatMontoOriginal(t.monto, t.moneda)}</div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className={cn(
@@ -153,7 +159,8 @@ export function TransactionsTable({
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               )}
             </TableBody>
           </Table>

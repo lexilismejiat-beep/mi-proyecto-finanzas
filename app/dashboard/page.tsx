@@ -9,6 +9,8 @@ import { CedulaSection } from "@/components/dashboard/cedula-section"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useThemeSettings } from "@/lib/theme-context"
+import { useProfile } from "@/contexts/profile-context"
+import { useTasas } from "@/lib/hooks/use-tasas"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -31,9 +33,12 @@ export default function DashboardPage() {
 
   const supabase = createClient()
   const { theme } = useThemeSettings()
+  const { cedula, monedaVisualizacion } = useProfile()
+  const { tasas } = useTasas()
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!cedula) return
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
@@ -44,17 +49,18 @@ export default function DashboardPage() {
           .select("*")
           .eq("id", user.id)
           .maybeSingle()
-        
+
         if (profileData) {
           setProfile(profileData)
-          
+
           const startOfMonth = new Date(selectedYear, selectedMonth, 1, 0, 0, 0).toISOString()
           const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59).toISOString()
 
+          // Los totales se calculan sobre monto_cop (eje contable fijo), nunca sobre monto.
           const { data: transData, error } = await supabase
             .from("transacciones")
-            .select("monto, tipo")
-            .eq("user_id", profileData.cedula) 
+            .select("monto_cop, tipo")
+            .eq("user_id", cedula)
             .gte("created_at", startOfMonth)
             .lte("created_at", endOfMonth)
 
@@ -63,11 +69,11 @@ export default function DashboardPage() {
           if (transData) {
             const income = transData
               .filter((t: any) => t.tipo === "Ingreso")
-              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
-            
+              .reduce((acc: number, t: any) => acc + (Number(t.monto_cop) || 0), 0)
+
             const expenses = transData
               .filter((t: any) => t.tipo === "Egreso")
-              .reduce((acc: number, t: any) => acc + (Number(t.monto) || 0), 0)
+              .reduce((acc: number, t: any) => acc + (Number(t.monto_cop) || 0), 0)
 
             setTotals({ income, expenses, balance: income - expenses })
           }
@@ -79,7 +85,7 @@ export default function DashboardPage() {
       }
     }
     fetchData()
-  }, [supabase, selectedMonth, selectedYear, selectedYear])
+  }, [supabase, selectedMonth, selectedYear, cedula])
 
   // --- LÓGICA DE TEMAS Y FONDO ---
   const backgroundImage = profile?.background_image || theme?.background_image_url || theme?.background_image
@@ -161,33 +167,33 @@ export default function DashboardPage() {
             </div>
 
             <div className="mb-8 w-full">
-              <StatsCards 
-                totalIncome={totals.income} 
-                totalExpenses={totals.expenses} 
+              <StatsCards
+                totalIncome={totals.income}
+                totalExpenses={totals.expenses}
                 currentBalance={totals.balance}
-                cardColor={theme?.card_color || "#FFFFFF"} 
-                textColor={activeTextColor} 
-                primaryColor={theme?.primary_color || "#10B981"} 
+                cardColor={theme?.card_color || "#FFFFFF"}
+                textColor={activeTextColor}
+                primaryColor={theme?.primary_color || "#10B981"}
+                moneda={monedaVisualizacion}
+                tasas={tasas}
               />
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3 w-full">
               <div className="lg:col-span-2 order-1 overflow-hidden">
-                <TransactionsTable 
-                  cardColor={theme?.card_color || "#FFFFFF"} 
-                  textColor={activeTextColor} 
-                  userCedula={profile?.cedula}
-                  selectedMonth={selectedMonth}
-                  selectedYear={selectedYear}
+                <TransactionsTable
+                  cardColor={theme?.card_color || "#FFFFFF"}
+                  textColor={activeTextColor}
+                  userCedula={cedula || undefined}
+                  moneda={monedaVisualizacion}
+                  tasas={tasas}
                 />
               </div>
 
               <div className="lg:col-span-1 order-2">
-                <CedulaSection 
-                  profile={profile} 
-                  cardColor={theme?.card_color || "#FFFFFF"} 
-                  textColor={activeTextColor} 
-                  primaryColor={theme?.primary_color || "#10B981"}
+                <CedulaSection
+                  profile={profile}
+                  cedula={cedula}
                 />
               </div>
             </div>
