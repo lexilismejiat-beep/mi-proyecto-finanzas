@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Wallet,
   Bell,
+  ClipboardCheck,
 } from "lucide-react"
 
 interface NavItem {
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { icon: PieChart, label: "Categorías", href: "/dashboard/categorias" },
   { icon: TrendingUp, label: "Reportes", href: "/dashboard/reportes" },
   { icon: Bell, label: "Recordatorios", href: "/dashboard/recordatorios" },
+  { icon: ClipboardCheck, label: "Responsabilidades", href: "/dashboard/responsabilidades" },
   { icon: CreditCard, label: "Suscripción", href: "/dashboard/pagos" }, // Nueva ruta
   { icon: Settings, label: "Configuración", href: "/dashboard/configuracion" },
 ]
