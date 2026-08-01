@@ -106,6 +106,19 @@ function montoEnCop(r: Responsabilidad, tasas: Record<Moneda, number>): number {
   return convertirACop(Number(r.monto), r.moneda, tasas)
 }
 
+// Una tasa de cambio en 0 no es un valor por defecto razonable, es un dato
+// inválido (tasas aún no cargaron, o la API de tasas falló y no hay caché).
+// Nunca hay que usar `|| 0` acá: eso congela monto_cop en cero para siempre
+// en cuanto se persiste. Esta función es la única fuente de verdad para
+// "¿tengo una tasa usable para esta moneda ahora mismo?" — devuelve null en
+// vez de una tasa inválida para forzar a quien la llama a manejar ese caso
+// explícitamente en vez de calcular con un número falso.
+function tasaValida(moneda: Moneda, tasas: Record<Moneda, number>): number | null {
+  if (moneda === "COP") return 1
+  const tasa = tasas[moneda]
+  return tasa > 0 ? tasa : null
+}
+
 // El monto "vigente" de una fila: si ya se pagó, se muestra lo que
 // realmente se pagó ese periodo (monto_pagado, congelado al marcar), no el
 // monto actual de la responsabilidad — si el usuario edita el arriendo de
@@ -483,6 +496,17 @@ export default function ResponsabilidadesPage() {
       toast.error("No se pudo identificar tu perfil, recargá la página")
       return
     }
+
+    // Si no hay una tasa usable para la moneda de esta responsabilidad,
+    // abortar ANTES de tocar la base: seguir de largo congelaría monto_cop
+    // en cero (tasa 0 → egreso que vale nada en balance/reportes, para
+    // siempre, porque monto_cop nunca se recalcula después de creado).
+    const tasaAplicada = tasaValida(r.moneda, tasas)
+    if (tasaAplicada === null) {
+      toast.error("Esperá a que carguen las tasas de cambio para poder registrar este pago")
+      return
+    }
+
     const periodoLocal = periodo
     const key = pendingKey(r.id, periodoLocal)
     if (pendingIds.has(key)) return
@@ -509,7 +533,6 @@ export default function ResponsabilidadesPage() {
     let transaccionCreadaId: number | null = null
 
     try {
-      const tasaAplicada = r.moneda === "COP" ? 1 : tasas[r.moneda] || 0
       const montoCop = r.monto * tasaAplicada
 
       const { data: transaccion, error: txError } = await supabase
@@ -583,18 +606,31 @@ export default function ResponsabilidadesPage() {
 
     aplicarSiVigente((prev) => upsertPagoLocal(prev, { ...pago, pagado: false, transaccion_id: null, pagado_at: null }))
 
+    // Orden importa: primero liberar el pago (pagado=false) y recién
+    // después borrar la transacción, no al revés. Si algo falla luego del
+    // UPDATE, el peor caso que queda es un egreso huérfano visible en
+    // Transacciones que el usuario puede borrar a mano — mucho mejor que
+    // un pago marcado "pagado" apuntando a una transacción que ya no existe.
     try {
-      if (pago.transaccion_id) {
-        const { error: txError } = await supabase.from("transacciones").delete().eq("id", pago.transaccion_id)
-        if (txError) throw txError
-      }
-
       const { error: pagoError } = await supabase
         .from("responsabilidades_pagos")
         .update({ pagado: false, transaccion_id: null, pagado_at: null })
         .eq("id", pago.id)
       if (pagoError) throw pagoError
+
+      if (pago.transaccion_id) {
+        const { error: txError } = await supabase.from("transacciones").delete().eq("id", pago.transaccion_id)
+        if (txError) {
+          // El pago ya quedó liberado (esto no es reversible sin arriesgar
+          // un doble estado peor); avisar en vez de resucitar el pago.
+          toast.error("El pago se desmarcó, pero el egreso no se pudo borrar automáticamente. Borralo a mano desde Transacciones.")
+          return
+        }
+      }
     } catch (error) {
+      // Acá lo que falló es el UPDATE de responsabilidades_pagos: la
+      // transacción original no se tocó todavía, así que revertir al
+      // estado previo (incluyendo su transaccion_id real) es seguro.
       aplicarSiVigente((prev) => upsertPagoLocal(prev, pago))
       toast.error("No se pudo revertir el pago: " + (error as Error).message)
     } finally {
@@ -705,13 +741,18 @@ export default function ResponsabilidadesPage() {
                 const pagado = pago?.pagado ?? false
                 const badge = getBadge(r, pagado)
                 const isPending = pendingIds.has(pendingKey(r.id, periodo))
+                // Marcar una fila en otra moneda necesita una tasa válida
+                // para calcular monto_cop; desmarcar no la necesita (solo
+                // borra la transacción ya creada), así que eso no se bloquea.
+                const bloqueadaPorTasa = r.moneda !== "COP" && tasaValida(r.moneda, tasas) === null
 
                 return (
                   <Card key={r.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200">
                     <CardContent className="p-3 flex items-center gap-3">
                       <Checkbox
                         checked={pagado}
-                        disabled={isPending}
+                        disabled={isPending || (!pagado && bloqueadaPorTasa)}
+                        title={!pagado && bloqueadaPorTasa ? "Esperando tasas de cambio para poder calcular el monto en COP" : undefined}
                         onCheckedChange={(checked) => {
                           if (checked === true) {
                             marcar(r)
