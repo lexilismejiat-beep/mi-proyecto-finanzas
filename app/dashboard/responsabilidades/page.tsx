@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,8 +41,7 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useProfile } from "@/contexts/profile-context"
 import { useTasas } from "@/lib/hooks/use-tasas"
-import { formatMoneda, convertir, convertirACop, type Moneda } from "@/lib/monedas"
-import { InputMoneda } from "@/components/dashboard/input-moneda"
+import { MONEDAS, formatMoneda, formatMontoOriginal, convertir, convertirACop, type Moneda } from "@/lib/monedas"
 
 const MONTHS = [
   { value: 0, label: "Enero" }, { value: 1, label: "Febrero" },
@@ -106,6 +106,23 @@ function montoEnCop(r: Responsabilidad, tasas: Record<Moneda, number>): number {
   return convertirACop(Number(r.monto), r.moneda, tasas)
 }
 
+// Una tasa de cambio en 0 no es un valor por defecto razonable, es un dato
+// inválido (tasas aún no cargaron, o la API de tasas falló y no hay caché).
+// Nunca hay que usar `|| 0` acá: eso congela monto_cop en cero para siempre
+// en cuanto se persiste. Esta función es la única fuente de verdad para
+// "¿tengo una tasa usable para esta moneda ahora mismo?" — devuelve null en
+// vez de una tasa inválida para forzar a quien la llama a manejar ese caso
+// explícitamente en vez de calcular con un número falso.
+function tasaValida(moneda: Moneda, tasas: Record<Moneda, number>): number | null {
+  if (moneda === "COP") return 1
+  const tasa = tasas[moneda]
+  return tasa > 0 ? tasa : null
+}
+
+function redondear(numero: number, moneda: Moneda): string {
+  return numero.toFixed(MONEDAS[moneda].decimales)
+}
+
 // El monto "vigente" de una fila: si ya se pagó, se muestra lo que
 // realmente se pagó ese periodo (monto_pagado, congelado al marcar), no el
 // monto actual de la responsabilidad — si el usuario edita el arriendo de
@@ -123,13 +140,13 @@ function pendingKey(responsabilidadId: string, periodo: string): string {
 function ModalResponsabilidad({
   userUuid,
   tasas,
-  tasasCargando,
+  monedaVisualizacion,
   onRefresh,
   editData = null,
 }: {
   userUuid: string
   tasas: Record<Moneda, number>
-  tasasCargando: boolean
+  monedaVisualizacion: Moneda
   onRefresh: () => void
   editData?: Responsabilidad | null
 }) {
@@ -138,41 +155,64 @@ function ModalResponsabilidad({
   const [loading, setLoading] = useState(false)
   const [desactivando, setDesactivando] = useState(false)
   const [confirmDesactivar, setConfirmDesactivar] = useState(false)
-  const [valorMontoCop, setValorMontoCop] = useState(0)
+  const [moneda, setMoneda] = useState<Moneda>(editData?.moneda ?? "COP")
+  const [montoTexto, setMontoTexto] = useState(editData ? redondear(Number(editData.monto), editData.moneda) : "")
 
   const handleOpenChange = (nuevoOpen: boolean) => {
     if (nuevoOpen) {
-      setValorMontoCop(editData ? montoEnCop(editData, tasas) : 0)
+      setMoneda(editData?.moneda ?? "COP")
+      setMontoTexto(editData ? redondear(Number(editData.monto), editData.moneda) : "")
       setConfirmDesactivar(false)
     }
     setOpen(nuevoOpen)
   }
 
-  // Si estamos editando una fila que (por algún motivo, ej. carga manual)
-  // no está en COP, esperar a que las tasas reales hayan cargado antes de
-  // dejar guardar: convertir con una tasa en 0 devolvería el monto crudo
-  // sin convertir y lo persistiría mal — el mismo tipo de drift que ya se
-  // resolvió para InputMoneda/MetaCard.
-  const esperandoTasasParaEditar = editData != null && editData.moneda !== "COP" && tasasCargando
+  // Cambiar de moneda reconvierte en vivo el valor visible (igual que hace
+  // InputMoneda en Configuración/meta), no lo deja como un número crudo
+  // reinterpretado en otra moneda. Si no hay tasa usable todavía para el
+  // origen o el destino, bloquear el cambio en vez de convertir con una
+  // tasa en 0 (eso corrompería el monto silenciosamente).
+  const cambiarMoneda = (nuevaMoneda: Moneda) => {
+    if (nuevaMoneda === moneda) return
+    if (tasaValida(moneda, tasas) === null || tasaValida(nuevaMoneda, tasas) === null) {
+      toast.error("Esperá a que carguen las tasas de cambio para cambiar de moneda")
+      return
+    }
+    const numero = parseFloat(montoTexto) || 0
+    if (numero > 0) {
+      const montoCop = convertirACop(numero, moneda, tasas)
+      setMontoTexto(redondear(convertir(montoCop, nuevaMoneda, tasas), nuevaMoneda))
+    }
+    setMoneda(nuevaMoneda)
+  }
+
+  const montoNumerico = parseFloat(montoTexto) || 0
+  const tasaMonedaSeleccionada = tasaValida(moneda, tasas)
+  const tasaVisualizacionValida = tasaValida(monedaVisualizacion, tasas) !== null
+  const equivalenteVisualizacion =
+    tasaMonedaSeleccionada !== null && tasaVisualizacionValida
+      ? convertir(montoNumerico * tasaMonedaSeleccionada, monedaVisualizacion, tasas)
+      : null
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    const formData = new FormData(e.currentTarget)
 
-    if (valorMontoCop <= 0) {
+    const montoNum = parseFloat(formData.get("monto") as string)
+    if (!montoNum || montoNum <= 0) {
       toast.error("Ingresá un monto mayor a cero")
       return
     }
 
     setLoading(true)
-    const formData = new FormData(e.currentTarget)
 
     const diaRaw = (formData.get("dia_vencimiento") as string) || ""
     const categoriaRaw = (formData.get("categoria") as string) || ""
 
     const payload = {
       nombre: formData.get("nombre") as string,
-      monto: valorMontoCop,
-      moneda: "COP" as Moneda,
+      monto: montoNum,
+      moneda,
       categoria: categoriaRaw || "Obligaciones",
       dia_vencimiento: diaRaw ? parseInt(diaRaw, 10) : null,
       user_uuid: userUuid,
@@ -239,15 +279,40 @@ function ModalResponsabilidad({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Monto mensual</Label>
-            <InputMoneda
-              valorInicialCop={valorMontoCop}
-              onChangeCop={setValorMontoCop}
-              disabled={esperandoTasasParaEditar}
-              inputClassName="w-full h-9 px-3 pr-14 rounded-md border border-white/10 bg-white/5 text-white text-sm"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Monto mensual</Label>
+              <Input
+                name="monto"
+                type="number"
+                step="any"
+                value={montoTexto}
+                onChange={(e) => setMontoTexto(e.target.value)}
+                placeholder="50000"
+                className="bg-white/5 border-white/10 text-white"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Moneda</Label>
+              <Select value={moneda} onValueChange={(v) => cambiarMoneda(v as Moneda)}>
+                <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-[#121212] border-white/10 text-white">
+                  {(Object.keys(MONEDAS) as Moneda[]).map((m) => (
+                    <SelectItem key={m} value={m}>{m} · {MONEDAS[m].simbolo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {moneda !== "COP" && montoNumerico > 0 && (
+            <p className="text-xs text-emerald-400 -mt-2">
+              {equivalenteVisualizacion !== null
+                ? `≈ ${formatMoneda(equivalenteVisualizacion, monedaVisualizacion)}`
+                : "Tasa de cambio no disponible por ahora"}
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -267,7 +332,6 @@ function ModalResponsabilidad({
                 min={1}
                 max={31}
                 defaultValue={editData?.dia_vencimiento ?? undefined}
-                placeholder="5"
                 className="bg-white/5 border-white/10 text-white"
               />
             </div>
@@ -276,7 +340,7 @@ function ModalResponsabilidad({
           <Button
             type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-            disabled={loading || esperandoTasasParaEditar}
+            disabled={loading}
           >
             {loading ? <Loader2 className="animate-spin" /> : editData ? "Guardar Cambios" : "Crear Responsabilidad"}
           </Button>
@@ -329,7 +393,7 @@ function ModalResponsabilidad({
 export default function ResponsabilidadesPage() {
   const supabase = createClient()
   const { user, cedula, monedaVisualizacion } = useProfile()
-  const { tasas, cargando: tasasCargando } = useTasas()
+  const { tasas } = useTasas()
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -483,10 +547,27 @@ export default function ResponsabilidadesPage() {
       toast.error("No se pudo identificar tu perfil, recargá la página")
       return
     }
+
+    // Si no hay una tasa usable para la moneda de esta responsabilidad,
+    // abortar ANTES de tocar la base: seguir de largo congelaría monto_cop
+    // en cero (tasa 0 → egreso que vale nada en balance/reportes, para
+    // siempre, porque monto_cop nunca se recalcula después de creado).
+    const tasaAplicada = tasaValida(r.moneda, tasas)
+    if (tasaAplicada === null) {
+      toast.error("Esperá a que carguen las tasas de cambio para poder registrar este pago")
+      return
+    }
+
     const periodoLocal = periodo
     const key = pendingKey(r.id, periodoLocal)
     if (pendingIds.has(key)) return
     agregarPendiente(key)
+
+    // monto_pagado se congela en COP (el eje contable fijo de la app, igual
+    // que transacciones.monto_cop), no en la moneda propia de la
+    // responsabilidad: si no fuera así, una fila en USD guardaría un número
+    // ambiguo sin unidad registrada.
+    const montoCop = r.monto * tasaAplicada
 
     const pagoAnterior = pagos.find((p) => p.responsabilidad_id === r.id) ?? null
     const aplicarSiVigente = (updater: (prev: ResponsabilidadPago[]) => ResponsabilidadPago[]) => {
@@ -501,7 +582,7 @@ export default function ResponsabilidadesPage() {
         periodo: periodoLocal,
         pagado: true,
         transaccion_id: pagoAnterior?.transaccion_id ?? null,
-        monto_pagado: r.monto,
+        monto_pagado: montoCop,
         pagado_at: new Date().toISOString(),
       })
     )
@@ -509,9 +590,6 @@ export default function ResponsabilidadesPage() {
     let transaccionCreadaId: number | null = null
 
     try {
-      const tasaAplicada = r.moneda === "COP" ? 1 : tasas[r.moneda] || 0
-      const montoCop = r.monto * tasaAplicada
-
       const { data: transaccion, error: txError } = await supabase
         .from("transacciones")
         .insert([
@@ -538,7 +616,7 @@ export default function ResponsabilidadesPage() {
         p_responsabilidad_id: r.id,
         p_periodo: periodoLocal,
         p_transaccion_id: transaccion.id,
-        p_monto_pagado: r.monto,
+        p_monto_pagado: montoCop,
       })
       if (rpcError) throw rpcError
 
@@ -583,18 +661,31 @@ export default function ResponsabilidadesPage() {
 
     aplicarSiVigente((prev) => upsertPagoLocal(prev, { ...pago, pagado: false, transaccion_id: null, pagado_at: null }))
 
+    // Orden importa: primero liberar el pago (pagado=false) y recién
+    // después borrar la transacción, no al revés. Si algo falla luego del
+    // UPDATE, el peor caso que queda es un egreso huérfano visible en
+    // Transacciones que el usuario puede borrar a mano — mucho mejor que
+    // un pago marcado "pagado" apuntando a una transacción que ya no existe.
     try {
-      if (pago.transaccion_id) {
-        const { error: txError } = await supabase.from("transacciones").delete().eq("id", pago.transaccion_id)
-        if (txError) throw txError
-      }
-
       const { error: pagoError } = await supabase
         .from("responsabilidades_pagos")
         .update({ pagado: false, transaccion_id: null, pagado_at: null })
         .eq("id", pago.id)
       if (pagoError) throw pagoError
+
+      if (pago.transaccion_id) {
+        const { error: txError } = await supabase.from("transacciones").delete().eq("id", pago.transaccion_id)
+        if (txError) {
+          // El pago ya quedó liberado (esto no es reversible sin arriesgar
+          // un doble estado peor); avisar en vez de resucitar el pago.
+          toast.error("El pago se desmarcó, pero el egreso no se pudo borrar automáticamente. Borralo a mano desde Transacciones.")
+          return
+        }
+      }
     } catch (error) {
+      // Acá lo que falló es el UPDATE de responsabilidades_pagos: la
+      // transacción original no se tocó todavía, así que revertir al
+      // estado previo (incluyendo su transaccion_id real) es seguro.
       aplicarSiVigente((prev) => upsertPagoLocal(prev, pago))
       toast.error("No se pudo revertir el pago: " + (error as Error).message)
     } finally {
@@ -652,7 +743,7 @@ export default function ResponsabilidadesPage() {
                 <ModalResponsabilidad
                   userUuid={user.id}
                   tasas={tasas}
-                  tasasCargando={tasasCargando}
+                  monedaVisualizacion={monedaVisualizacion}
                   onRefresh={fetchResponsabilidades}
                 />
               )}
@@ -693,7 +784,7 @@ export default function ResponsabilidadesPage() {
                     <ModalResponsabilidad
                       userUuid={user.id}
                       tasas={tasas}
-                      tasasCargando={tasasCargando}
+                      monedaVisualizacion={monedaVisualizacion}
                       onRefresh={fetchResponsabilidades}
                     />
                   </div>
@@ -705,13 +796,18 @@ export default function ResponsabilidadesPage() {
                 const pagado = pago?.pagado ?? false
                 const badge = getBadge(r, pagado)
                 const isPending = pendingIds.has(pendingKey(r.id, periodo))
+                // Marcar una fila en otra moneda necesita una tasa válida
+                // para calcular monto_cop; desmarcar no la necesita (solo
+                // borra la transacción ya creada), así que eso no se bloquea.
+                const bloqueadaPorTasa = r.moneda !== "COP" && tasaValida(r.moneda, tasas) === null
 
                 return (
                   <Card key={r.id} className="bg-[#121212] border-white/5 hover:border-white/10 transition-all duration-200">
                     <CardContent className="p-3 flex items-center gap-3">
                       <Checkbox
                         checked={pagado}
-                        disabled={isPending}
+                        disabled={isPending || (!pagado && bloqueadaPorTasa)}
+                        title={!pagado && bloqueadaPorTasa ? "Esperando tasas de cambio para poder calcular el monto en COP" : undefined}
                         onCheckedChange={(checked) => {
                           if (checked === true) {
                             marcar(r)
@@ -746,12 +842,15 @@ export default function ResponsabilidadesPage() {
                         <p className={cn("font-black text-lg tracking-tighter", pagado ? "text-gray-500" : "text-white")}>
                           {formatCurrency(montoDeFila(fila, tasas))}
                         </p>
+                        {r.moneda !== "COP" && (
+                          <p className="text-[10px] text-gray-500 font-medium">{formatMontoOriginal(r.monto, r.moneda)}</p>
+                        )}
                       </div>
 
                       <ModalResponsabilidad
                         userUuid={r.user_uuid}
                         tasas={tasas}
-                        tasasCargando={tasasCargando}
+                        monedaVisualizacion={monedaVisualizacion}
                         onRefresh={fetchResponsabilidades}
                         editData={r}
                       />
