@@ -2,9 +2,18 @@
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, Bell, Menu } from "lucide-react"
+import { LogOut, Bell, Menu, ArrowRightLeft } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Conversor } from "@/components/dashboard/conversor"
 
 interface TopBarProps {
   userName?: string
@@ -50,6 +59,29 @@ export function TopBar({ userName = "Usuario", avatarUrl, onMenuClick }: TopBarP
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Conversor de monedas: herramienta de consulta accesible desde cualquier pantalla */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              aria-label="Conversor de monedas"
+              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <ArrowRightLeft className="h-5 w-5" />
+            </button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5 text-primary" /> Conversor de monedas
+              </DialogTitle>
+              <DialogDescription>
+                Consulta rápida de tasas. No guarda nada ni afecta tus movimientos.
+              </DialogDescription>
+            </DialogHeader>
+            <Conversor className="mt-2" />
+          </DialogContent>
+        </Dialog>
+
         {/* Notifications */}
         <button className="relative rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
           <Bell className="h-5 w-5" />
