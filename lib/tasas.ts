@@ -4,6 +4,8 @@ import type { Moneda } from "@/lib/monedas"
 export interface TasasResultado {
   tasas: Record<Moneda, number>
   esObsoleta: boolean
+  /** Fecha (ISO YYYY-MM-DD) a la que corresponden las tasas, o null si no hay ninguna. */
+  fecha: string | null
 }
 
 interface TasaCambioRow {
@@ -22,7 +24,14 @@ let tasasEnCache: TasasResultado | null = null
 let solicitudEnCurso: Promise<TasasResultado> | null = null
 
 function fechaHoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  // Fecha LOCAL del usuario (no UTC): toISOString() devuelve UTC, y en
+  // Colombia (UTC-5) después de las 19:00 ya marca el día siguiente, lo que
+  // duplicaba filas en tasas_cambio y rompía la caché de noche.
+  const ahora = new Date()
+  const anio = ahora.getFullYear()
+  const mes = String(ahora.getMonth() + 1).padStart(2, "0")
+  const dia = String(ahora.getDate()).padStart(2, "0")
+  return `${anio}-${mes}-${dia}`
 }
 
 function filasATasas(filas: TasaCambioRow[]): Record<Moneda, number> {
@@ -70,7 +79,7 @@ async function cargarTasas(): Promise<TasasResultado> {
     if (data && data.length > 0) {
       const tasas = filasATasas(data)
       if (tasas.USD > 0 && tasas.EUR > 0) {
-        return { tasas, esObsoleta: false }
+        return { tasas, esObsoleta: false, fecha }
       }
     }
 
@@ -108,7 +117,7 @@ async function obtenerDeApiYGuardar(fecha: string): Promise<TasasResultado> {
 
     if (error) console.error("No se pudo cachear la tasa de cambio del día:", error)
 
-    return { tasas: { COP: 1, USD: tasaUsd, EUR: tasaEur }, esObsoleta: false }
+    return { tasas: { COP: 1, USD: tasaUsd, EUR: tasaEur }, esObsoleta: false, fecha }
   } catch (error) {
     console.error("Error consultando open.er-api.com:", error)
     return await ultimaTasaDisponible()
@@ -121,26 +130,27 @@ async function ultimaTasaDisponible(): Promise<TasasResultado> {
     const [usd, eur] = await Promise.all([
       supabase
         .from("tasas_cambio")
-        .select("tasa_a_cop")
+        .select("tasa_a_cop, fecha")
         .eq("moneda", "USD")
         .order("fecha", { ascending: false })
         .limit(1)
-        .returns<{ tasa_a_cop: number }[]>(),
+        .returns<{ tasa_a_cop: number; fecha: string }[]>(),
       supabase
         .from("tasas_cambio")
-        .select("tasa_a_cop")
+        .select("tasa_a_cop, fecha")
         .eq("moneda", "EUR")
         .order("fecha", { ascending: false })
         .limit(1)
-        .returns<{ tasa_a_cop: number }[]>(),
+        .returns<{ tasa_a_cop: number; fecha: string }[]>(),
     ])
 
     const tasaUsd = usd.data?.[0]?.tasa_a_cop ?? 0
     const tasaEur = eur.data?.[0]?.tasa_a_cop ?? 0
+    const fecha = usd.data?.[0]?.fecha ?? eur.data?.[0]?.fecha ?? null
 
-    return { tasas: { COP: 1, USD: Number(tasaUsd), EUR: Number(tasaEur) }, esObsoleta: true }
+    return { tasas: { COP: 1, USD: Number(tasaUsd), EUR: Number(tasaEur) }, esObsoleta: true, fecha }
   } catch (error) {
     console.error("Error obteniendo la última tasa disponible:", error)
-    return { tasas: { ...TASAS_VACIAS }, esObsoleta: true }
+    return { tasas: { ...TASAS_VACIAS }, esObsoleta: true, fecha: null }
   }
 }

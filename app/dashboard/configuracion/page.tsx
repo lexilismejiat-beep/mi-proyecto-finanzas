@@ -12,11 +12,12 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Save, Target, Camera, MapPin, User as UserIcon, Coins, PiggyBank } from "lucide-react"
+import { Loader2, Save, Target, Camera, MapPin, User as UserIcon, Coins, PiggyBank, ArrowRightLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useProfile } from "@/contexts/profile-context"
 import { InputMoneda } from "@/components/dashboard/input-moneda"
 import { SelectorMoneda } from "@/components/dashboard/selector-moneda"
+import { Conversor } from "@/components/dashboard/conversor"
 
 export default function ConfiguracionPage() {
   const supabase = createClient()
@@ -329,6 +330,20 @@ export default function ConfiguracionPage() {
                   </div>
                   <p className="text-xs text-zinc-500">
                     Se suma al balance. Úsalo para reflejar el dinero que ya tenías cuando empezaste.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-[#121212] border-zinc-800 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <ArrowRightLeft className="h-5 w-5 text-emerald-500" /> Conversor de Monedas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Conversor />
+                  <p className="mt-3 text-xs text-zinc-500">
+                    Herramienta de consulta. No guarda nada ni afecta tus movimientos.
                   </p>
                 </CardContent>
               </Card>
